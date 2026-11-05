@@ -125,6 +125,7 @@
       }
       .topbar {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 20px;
         min-height: 64px;
@@ -413,7 +414,7 @@
 
       /* Persönlicher Bericht: Navigation, Buchungshistorie und Statistik. */
       .account {
-        flex: 1;
+        flex: 1 1 180px;
         min-width: 0;
         overflow-wrap: anywhere;
       }
@@ -476,6 +477,50 @@
         padding: 16px;
         border-radius: 12px;
         background: var(--gray);
+      }
+
+      /* Bierwart: Formulare und Monatsabrechnung verwenden dieselbe Farbpalette. */
+      .admin-form {
+        display: grid;
+        gap: 16px;
+      }
+
+      .admin-field {
+        display: grid;
+        gap: 8px;
+        font-weight: 700;
+      }
+
+      select {
+        font: inherit;
+        color: var(--black);
+        background: var(--white);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        min-height: 48px;
+        width: 100%;
+      }
+
+      select:focus-visible {
+        outline: 3px solid var(--black);
+        outline-offset: 3px;
+      }
+
+      .admin-message {
+        line-height: 1.5;
+      }
+
+      .admin-message[data-error="true"] {
+        color: var(--red);
+      }
+
+      .monthly-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 8px;
       }
 
       /* 13. Anpassungen für niedrige Bildschirme */
@@ -621,6 +666,7 @@
           <div id="account-balance" class="balance"></div>
         </div>
         <button id="report" class="report-button">Bericht</button>
+        <button id="bierwart" class="people-button">Bierwart</button>
       </header>
       <!-- Anzeigefeld für die aktuelle Auswahl und die letzte erfolgreiche Buchung. -->
       <section class="display" aria-label="Aktuelle Buchung">
@@ -769,6 +815,137 @@
       </div>
     </dialog>
 
+    <!-- POPUP 5: Pseudopasswort für den Bierwartbereich. -->
+    <dialog
+      id="bierwart-login"
+      class="modal"
+      aria-labelledby="bierwart-login-title"
+    >
+      <div class="modal-body">
+        <div class="modal-head">
+          <h2 id="bierwart-login-title">Bierwart</h2>
+          <button
+            class="close"
+            data-close="bierwart-login"
+            aria-label="Passwortfenster schließen"
+          >
+            ×
+          </button>
+        </div>
+        <p class="report-caption">
+          Pseudopasswort: test. Dieser Zugang bietet keinen echten
+          Zugriffsschutz.
+        </p>
+        <form id="bierwart-login-form" class="admin-form">
+          <label class="admin-field"
+            >Passwort
+            <input
+              id="bierwart-password"
+              type="password"
+              autocomplete="off"
+              required
+            />
+          </label>
+          <p id="bierwart-login-error" class="error" role="alert" hidden></p>
+          <button type="submit" class="primary">Öffnen</button>
+        </form>
+      </div>
+    </dialog>
+
+    <!-- POPUP 6: Personenverwaltung, Guthabenkorrekturen und Monatsberichte. -->
+    <dialog id="bierwart-dialog" class="modal" aria-labelledby="bierwart-title">
+      <div class="modal-body">
+        <div class="modal-head">
+          <h2 id="bierwart-title">Bierwart</h2>
+          <button
+            class="close"
+            data-close="bierwart-dialog"
+            aria-label="Bierwartbereich schließen"
+          >
+            ×
+          </button>
+        </div>
+        <div id="bierwart-options" class="report-options">
+          <button id="admin-create" class="primary">Benutzer anlegen</button>
+          <button id="admin-balance" class="primary">Guthaben ändern</button>
+          <button id="admin-monthly" class="primary">Monatsbericht</button>
+        </div>
+
+        <form id="create-person-form" class="admin-form" hidden>
+          <label class="admin-field"
+            >Name
+            <input
+              id="new-person-name"
+              autocomplete="off"
+              maxlength="80"
+              required
+            />
+          </label>
+          <label class="admin-field"
+            >NFC-Kennung
+            <input
+              id="new-person-nfc"
+              autocomplete="off"
+              maxlength="120"
+              required
+            />
+          </label>
+          <p class="report-caption">
+            Neue Personen starten mit 0,00 € Guthaben.
+          </p>
+          <button type="submit" class="primary positive">
+            Benutzer anlegen
+          </button>
+        </form>
+
+        <form id="change-balance-form" class="admin-form" hidden>
+          <label class="admin-field"
+            >Person
+            <select id="balance-person" required></select>
+          </label>
+          <p id="balance-current" class="report-caption"></p>
+          <label class="admin-field"
+            >Neues Guthaben in Euro
+            <input
+              id="new-balance"
+              type="text"
+              inputmode="decimal"
+              placeholder="z. B. -5,00"
+              autocomplete="off"
+              required
+            />
+          </label>
+          <p class="report-caption">
+            Der eingegebene Betrag ersetzt das Guthaben im aktuellen Monat. Die
+            Änderung bleibt als Korrektur gespeichert; Getränkebuchungen bleiben
+            erhalten.
+          </p>
+          <button type="submit" class="primary positive">
+            Guthaben speichern
+          </button>
+        </form>
+
+        <section id="monthly-report" class="admin-form" hidden>
+          <label class="admin-field"
+            >Abrechnungsmonat
+            <input id="admin-month" type="month" required />
+          </label>
+          <p class="report-caption">
+            Schulden je Person für den gewählten Monat, einschließlich
+            Guthabenkorrekturen. Positive Guthaben werden nicht als Schulden
+            gezählt.
+          </p>
+          <p id="monthly-total" class="report-total"></p>
+          <ul id="monthly-list" class="monthly-list"></ul>
+        </section>
+
+        <p id="admin-message" class="admin-message" role="status" hidden></p>
+        <button id="admin-back" class="back" hidden>
+          Zurück zur Verwaltung
+        </button>
+      </div>
+    </dialog>
+
     <!-- JAVASCRIPT: Daten, Speicherung und Reaktionen auf die Bedienung. -->
     <script>
       "use strict";
@@ -777,7 +954,7 @@
       const STORAGE_KEY = "tresensystem.v1";
 
       // 2. Personen: feste IDs, Anzeigenamen und eindeutige NFC-Platzhalter.
-      const people = Array.from({ length: 99 }, (_, i) => ({
+      let people = Array.from({ length: 99 }, (_, i) => ({
         id: `person-${String(i + 1).padStart(2, "0")}`,
         name: `Person ${String(i + 1).padStart(2, "0")}`,
         nfcId: `NFC-${String(i + 1).padStart(4, "0")}`,
@@ -798,12 +975,25 @@
         personId,
         month = monthKey(),
         transactions = state.transactions,
+        adjustments = state.adjustments || [],
       ) {
-        // Guthaben wird ausschließlich aus den Buchungen des gewählten Monats berechnet.
-        return -transactions
-          .filter((t) => t.personId === personId && t.month === month)
-          .reduce((sum, t) => sum + t.totalCents, 0);
+        // Getränkebuchungen und Guthabenkorrekturen gehören jeweils zu einem Monat.
+        const purchases = transactions
+          .filter(
+            (transaction) =>
+              transaction.personId === personId && transaction.month === month,
+          )
+          .reduce((sum, transaction) => sum + transaction.totalCents, 0);
+        const corrections = adjustments
+          .filter(
+            (adjustment) =>
+              adjustment.personId === personId && adjustment.month === month,
+          )
+          .reduce((sum, adjustment) => sum + adjustment.amountCents, 0);
+
+        return corrections - purchases;
       }
+
       function euro(cents) {
         return new Intl.NumberFormat("de-DE", {
           style: "currency",
@@ -813,36 +1003,91 @@
 
       // Gespeicherte Buchungen auf gültige Struktur und Beträge prüfen.
       function validState(data) {
+        if (!data || data.version !== 1 || !Array.isArray(data.transactions))
+          return false;
+
+        const users = data.people || people;
+        const adjustments = data.adjustments || [];
+        const knownPerson = (id) => users.some((person) => person.id === id);
+        const validMonth = (value) => /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+
+        if (
+          !Array.isArray(users) ||
+          !users.length ||
+          !Array.isArray(adjustments)
+        )
+          return false;
+        if (
+          !users.every(
+            (person) =>
+              person &&
+              typeof person.id === "string" &&
+              typeof person.name === "string" &&
+              person.name.trim() &&
+              typeof person.nfcId === "string" &&
+              person.nfcId.trim(),
+          )
+        )
+          return false;
+        if (
+          new Set(users.map((person) => person.id)).size !== users.length ||
+          new Set(users.map((person) => person.nfcId)).size !== users.length
+        )
+          return false;
+
         return (
-          data &&
-          data.version === 1 &&
-          Array.isArray(data.transactions) &&
           data.transactions.every(
-            (t) =>
-              typeof t.id === "string" &&
-              people.some((p) => p.id === t.personId) &&
-              drinks.some((d) => d.id === t.productId) &&
-              Number.isInteger(t.quantity) &&
-              t.quantity >= 1 &&
-              t.quantity <= 99 &&
-              Number.isInteger(t.unitPriceCents) &&
-              t.unitPriceCents >= 0 &&
-              t.totalCents === t.quantity * t.unitPriceCents &&
-              /^\d{4}-\d{2}$/.test(t.month) &&
-              !Number.isNaN(Date.parse(t.createdAt)),
+            (transaction) =>
+              transaction &&
+              typeof transaction.id === "string" &&
+              knownPerson(transaction.personId) &&
+              drinks.some((drink) => drink.id === transaction.productId) &&
+              Number.isInteger(transaction.quantity) &&
+              transaction.quantity >= 1 &&
+              transaction.quantity <= 99 &&
+              Number.isSafeInteger(transaction.unitPriceCents) &&
+              transaction.unitPriceCents >= 0 &&
+              Number.isSafeInteger(transaction.totalCents) &&
+              transaction.totalCents ===
+                transaction.quantity * transaction.unitPriceCents &&
+              validMonth(transaction.month) &&
+              !Number.isNaN(Date.parse(transaction.createdAt)),
+          ) &&
+          adjustments.every(
+            (adjustment) =>
+              adjustment &&
+              typeof adjustment.id === "string" &&
+              knownPerson(adjustment.personId) &&
+              Number.isSafeInteger(adjustment.amountCents) &&
+              validMonth(adjustment.month) &&
+              !Number.isNaN(Date.parse(adjustment.createdAt)),
           )
         );
       }
 
+      // Bestehende Buchungsdaten um Personen und Korrekturen erweitern, ohne sie zu löschen.
+      function normalizeState(data) {
+        return {
+          ...data,
+          people: (data.people || people)
+            .map((person) => ({ ...person }))
+            .sort((a, b) =>
+              a.name.localeCompare(b.name, "de", { numeric: true }),
+            ),
+          adjustments: data.adjustments || [],
+        };
+      }
+
       // 5. Buchungsjournal laden. Bei Speicherfehlern werden Buchungen gesperrt.
-      let state = { version: 1, transactions: [] },
+      let state = normalizeState({ version: 1, transactions: [] }),
         storageReady = true;
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw !== null) {
           const saved = JSON.parse(raw);
           if (!validState(saved)) throw Error("invalid");
-          state = saved;
+          state = normalizeState(saved);
+          people = state.people;
         }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       } catch {
@@ -1048,8 +1293,9 @@
         try {
           const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
           if (!validState(saved)) throw Error("invalid");
-          if (JSON.stringify(saved) !== JSON.stringify(state)) {
-            state = saved;
+          if (JSON.stringify(normalizeState(saved)) !== JSON.stringify(state)) {
+            state = normalizeState(saved);
+            people = state.people;
             updateAccount();
             review();
             showBookingError(
@@ -1072,7 +1318,7 @@
             month: monthKey(),
           };
           const next = {
-            version: 1,
+            ...state,
             transactions: [...state.transactions, transaction],
           };
           // Erst nach erfolgreichem Speichern gilt die Buchung als abgeschlossen.
@@ -1315,6 +1561,264 @@
         renderReport();
       });
 
+      // 21. Bierwartverwaltung: Pseudozugang und lokal gespeicherte Kontoverwaltung.
+      // Die Passwortprüfung ist bewusst nur eine Bedienhürde und keine Anmeldung am Server.
+      let adminUnlocked = false;
+      let adminView = "overview";
+
+      function adminMessage(message, isError = false) {
+        $("admin-message").textContent = message;
+        $("admin-message").dataset.error = String(isError);
+        $("admin-message").hidden = false;
+      }
+
+      function nextPersonNumber(users = people) {
+        return (
+          Math.max(
+            0,
+            ...users.map(
+              (person) => Number(person.id.replace("person-", "")) || 0,
+            ),
+          ) + 1
+        );
+      }
+
+      function updateAdminPersonOptions() {
+        const selectedId = $("balance-person").value || activePerson.id;
+        $("balance-person").replaceChildren();
+
+        for (const person of people) {
+          const option = document.createElement("option");
+          option.value = person.id;
+          option.textContent = person.name;
+          $("balance-person").append(option);
+        }
+
+        $("balance-person").value = people.some(
+          (person) => person.id === selectedId,
+        )
+          ? selectedId
+          : people[0].id;
+        updateAdminBalance();
+      }
+
+      function updateAdminBalance() {
+        const value = balanceFor($("balance-person").value);
+        $("balance-current").textContent =
+          `Aktuelles Guthaben (${monthKey()}): ${euro(value)}`;
+        $("new-balance").value = (value / 100).toFixed(2).replace(".", ",");
+      }
+
+      // Für jeden Monat wird der gespeicherte Kontostand ausgewertet, nicht nur der laufende Monat.
+      function monthlyDebts(month, data = state) {
+        return data.people.map((person) => {
+          const balance = balanceFor(
+            person.id,
+            month,
+            data.transactions,
+            data.adjustments,
+          );
+          return { ...person, balance, debt: Math.max(0, -balance) };
+        });
+      }
+
+      function renderMonthlyReport() {
+        const month = $("admin-month").value;
+        $("monthly-list").replaceChildren();
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+          $("monthly-total").textContent = "Bitte einen gültigen Monat wählen.";
+          return;
+        }
+
+        const entries = monthlyDebts(month);
+        const totalDebt = entries.reduce((sum, person) => sum + person.debt, 0);
+        $("monthly-total").textContent =
+          `${month} · Schulden gesamt: ${euro(totalDebt)}`;
+
+        for (const person of entries) {
+          const row = document.createElement("li");
+          row.className = "statistic-entry";
+          const name = document.createElement("span");
+          name.textContent = person.name;
+          const debt = document.createElement("strong");
+          debt.className = "balance";
+          debt.textContent = euro(person.debt);
+          row.append(name, debt);
+          $("monthly-list").append(row);
+        }
+      }
+
+      function showAdminView(view) {
+        adminView = view;
+        $("bierwart-options").hidden = view !== "overview";
+        $("create-person-form").hidden = view !== "create";
+        $("change-balance-form").hidden = view !== "balance";
+        $("monthly-report").hidden = view !== "monthly";
+        $("admin-back").hidden = view === "overview";
+        $("admin-message").hidden = true;
+        $("bierwart-title").textContent = {
+          overview: "Bierwart",
+          create: "Benutzer anlegen",
+          balance: "Guthaben ändern",
+          monthly: "Monatsbericht",
+        }[view];
+
+        if (view === "create") {
+          const number = nextPersonNumber();
+          $("new-person-name").value =
+            `Person ${String(number).padStart(2, "0")}`;
+          $("new-person-nfc").value = `NFC-${String(number).padStart(4, "0")}`;
+        }
+        if (view === "balance") updateAdminPersonOptions();
+        if (view === "monthly") {
+          $("admin-month").value = monthKey();
+          renderMonthlyReport();
+        }
+      }
+
+      // Änderungen auf den neuesten Datenstand anwenden und erst nach erfolgreicher Speicherung anzeigen.
+      function saveAdminChange(change) {
+        if (!adminUnlocked)
+          throw Error("Bitte den Bierwartbereich erneut öffnen.");
+        if (!storageReady)
+          throw Error(
+            "Der lokale Speicher ist nicht verfügbar. Es wurden keine Änderungen gespeichert.",
+          );
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (!validState(saved))
+          throw Error("Die gespeicherten Daten sind ungültig.");
+        const next = normalizeState(saved);
+        change(next);
+        if (!validState(next))
+          throw Error("Die Änderung enthält ungültige Daten.");
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        state = next;
+        people = state.people;
+        activePerson =
+          people.find((person) => person.id === activePerson.id) || people[0];
+        updateAccount();
+        if ($("people-dialog").open) renderPeople();
+        if ($("report-dialog").open) renderReport();
+      }
+
+      $("bierwart").addEventListener("click", () => {
+        $("bierwart-password").value = "";
+        $("bierwart-login-error").hidden = true;
+        showDialog("bierwart-login");
+      });
+
+      $("bierwart-login-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        if ($("bierwart-password").value !== "test") {
+          $("bierwart-login-error").textContent = "Falsches Passwort.";
+          $("bierwart-login-error").hidden = false;
+          return;
+        }
+        adminUnlocked = true;
+        $("bierwart-login").close();
+        showAdminView("overview");
+        showDialog("bierwart-dialog");
+      });
+
+      $("bierwart-dialog").addEventListener("close", () => {
+        adminUnlocked = false;
+      });
+      $("admin-create").addEventListener("click", () =>
+        showAdminView("create"),
+      );
+      $("admin-balance").addEventListener("click", () =>
+        showAdminView("balance"),
+      );
+      $("admin-monthly").addEventListener("click", () =>
+        showAdminView("monthly"),
+      );
+      $("admin-back").addEventListener("click", () =>
+        showAdminView("overview"),
+      );
+      $("balance-person").addEventListener("change", updateAdminBalance);
+      $("admin-month").addEventListener("input", renderMonthlyReport);
+
+      $("create-person-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const name = $("new-person-name").value.trim();
+        const nfcId = $("new-person-nfc").value.trim();
+        try {
+          if (!name || !nfcId)
+            throw Error("Bitte Name und NFC-Kennung eingeben.");
+          if (name.length > 80 || nfcId.length > 120)
+            throw Error("Name oder NFC-Kennung ist zu lang.");
+          saveAdminChange((next) => {
+            if (
+              next.people.some(
+                (person) =>
+                  person.name.toLocaleLowerCase("de") ===
+                  name.toLocaleLowerCase("de"),
+              )
+            )
+              throw Error("Dieser Name ist bereits vergeben.");
+            if (next.people.some((person) => person.nfcId === nfcId))
+              throw Error("Diese NFC-Kennung ist bereits vergeben.");
+            next.people.push({
+              id: `person-${String(nextPersonNumber(next.people)).padStart(2, "0")}`,
+              name,
+              nfcId,
+            });
+            next.people.sort((a, b) =>
+              a.name.localeCompare(b.name, "de", { numeric: true }),
+            );
+          });
+          adminMessage(`${name} wurde mit 0,00 € Guthaben angelegt.`);
+          const number = nextPersonNumber();
+          $("new-person-name").value =
+            `Person ${String(number).padStart(2, "0")}`;
+          $("new-person-nfc").value = `NFC-${String(number).padStart(4, "0")}`;
+        } catch (error) {
+          adminMessage(error.message, true);
+        }
+      });
+
+      // Zielguthaben als Differenz zum bisherigen Stand speichern; die Historie bleibt unverändert.
+      $("change-balance-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        try {
+          const input = $("new-balance").value.trim();
+          if (!/^-?\d+(?:[.,]\d{1,2})?$/.test(input))
+            throw Error(
+              "Bitte einen Eurobetrag mit höchstens zwei Nachkommastellen eingeben.",
+            );
+          const targetCents = Math.round(Number(input.replace(",", ".")) * 100);
+          if (!Number.isSafeInteger(targetCents))
+            throw Error("Dieser Betrag ist zu groß.");
+          const personId = $("balance-person").value;
+          saveAdminChange((next) => {
+            if (!next.people.some((person) => person.id === personId))
+              throw Error("Person nicht gefunden.");
+            const month = monthKey();
+            const current = balanceFor(
+              personId,
+              month,
+              next.transactions,
+              next.adjustments,
+            );
+            const amountCents = targetCents - current;
+            if (amountCents !== 0)
+              next.adjustments.push({
+                id: crypto.randomUUID(),
+                personId,
+                amountCents,
+                month,
+                createdAt: new Date().toISOString(),
+                reason: "Guthaben durch Bierwart festgelegt",
+              });
+          });
+          updateAdminBalance();
+          adminMessage(`Guthaben gespeichert: ${euro(targetCents)}.`);
+          resetDisplay();
+        } catch (error) {
+          adminMessage(error.message, true);
+        }
+      });
+
       // 16. Alle Schließen-Schaltflächen mit ihrem zugehörigen Popup verbinden.
       document
         .querySelectorAll("[data-close]")
@@ -1330,10 +1834,15 @@
         try {
           const saved = JSON.parse(event.newValue);
           if (!validState(saved)) throw Error("invalid");
-          state = saved;
+          state = normalizeState(saved);
+          people = state.people;
           updateAccount();
           if ($("people-dialog").open) renderPeople();
           if ($("report-dialog").open) renderReport();
+          if ($("bierwart-dialog").open && adminView === "monthly")
+            renderMonthlyReport();
+          if ($("bierwart-dialog").open && adminView === "balance")
+            updateAdminPersonOptions();
           if ($("product-dialog").open && !$("review-step").hidden) {
             review();
             showBookingError(
@@ -1355,6 +1864,10 @@
           resetDisplay();
           if ($("people-dialog").open) renderPeople();
           if ($("report-dialog").open) renderReport();
+          if ($("bierwart-dialog").open && adminView === "monthly")
+            renderMonthlyReport();
+          if ($("bierwart-dialog").open && adminView === "balance")
+            updateAdminPersonOptions();
           if ($("product-dialog").open && !$("review-step").hidden) {
             review();
             showBookingError(
