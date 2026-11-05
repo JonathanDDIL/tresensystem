@@ -411,6 +411,73 @@
         font-variant-numeric: tabular-nums;
       }
 
+      /* Persönlicher Bericht: Navigation, Buchungshistorie und Statistik. */
+      .account {
+        flex: 1;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .report-button {
+        margin-left: auto;
+        padding: 12px 18px;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+
+      .report-options {
+        display: grid;
+        gap: 12px;
+      }
+
+      .report-person {
+        font-weight: 700;
+      }
+
+      .report-caption {
+        line-height: 1.5;
+        font-size: 14px;
+      }
+
+      .report-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .history-entry,
+      .statistic-entry {
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+      }
+
+      .history-entry {
+        display: grid;
+        gap: 10px;
+        line-height: 1.5;
+      }
+
+      .history-entry time {
+        font-size: 14px;
+      }
+
+      .statistic-entry {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .report-total {
+        font-weight: 700;
+        padding: 16px;
+        border-radius: 12px;
+        background: var(--gray);
+      }
+
       /* 13. Anpassungen für niedrige Bildschirme */
       @media (max-height: 720px) {
         .screen {
@@ -478,8 +545,9 @@
         .topbar {
           gap: 12px;
         }
-        .people-button {
-          padding: 10px 14px;
+        .people-button,
+        .report-button {
+          padding: 10px 12px;
         }
         .display-head {
           font-size: 12px;
@@ -552,6 +620,7 @@
           <div>Angemeldet als: <strong id="person-name"></strong></div>
           <div id="account-balance" class="balance"></div>
         </div>
+        <button id="report" class="report-button">Bericht</button>
       </header>
       <!-- Anzeigefeld für die aktuelle Auswahl und die letzte erfolgreiche Buchung. -->
       <section class="display" aria-label="Aktuelle Buchung">
@@ -664,6 +733,42 @@
         <button id="accept-number" class="primary">Übernehmen</button>
       </div>
     </dialog>
+    <!-- POPUP 4: Persönlicher Bericht über alle lokal gespeicherten Monate. -->
+    <dialog id="report-dialog" class="modal" aria-labelledby="report-title">
+      <div class="modal-body">
+        <div class="modal-head">
+          <h2 id="report-title">Bericht</h2>
+          <button
+            class="close"
+            data-close="report-dialog"
+            aria-label="Bericht schließen"
+          >
+            ×
+          </button>
+        </div>
+        <p id="report-person" class="report-person"></p>
+        <p class="report-caption">
+          Alle auf diesem Gerät gespeicherten Monate. Datum und Uhrzeit werden
+          in der lokalen Zeitzone angezeigt.
+        </p>
+        <div id="report-options" class="report-options">
+          <button id="show-history" class="primary">Buchungshistorie</button>
+          <button id="show-statistics" class="primary">Statistik</button>
+        </div>
+        <section id="report-content" aria-label="Berichtsinhalt" hidden>
+          <p id="report-total" class="report-total"></p>
+          <ul
+            id="report-list"
+            class="report-list"
+            style="margin-top: 16px"
+          ></ul>
+        </section>
+        <button id="report-back" class="back" hidden>
+          Zurück zur Übersicht
+        </button>
+      </div>
+    </dialog>
+
     <!-- JAVASCRIPT: Daten, Speicherung und Reaktionen auf die Bedienung. -->
     <script>
       "use strict";
@@ -1075,6 +1180,141 @@
         }
       });
 
+      // 20. Persönliche Berichte: immer nur Buchungen der ausgewählten Person.
+      // Der Zeitraum umfasst alle gespeicherten Monate, auch nach einem Monatswechsel.
+      let reportView = "overview";
+
+      function transactionsForPerson(personId) {
+        return state.transactions
+          .filter((transaction) => transaction.personId === personId)
+          .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+      }
+
+      // Mengen je Produkt zusammenfassen; die Anzahl zählt Getränke, nicht Buchungsvorgänge.
+      function statisticsFor(transactions) {
+        const totals = new Map();
+
+        for (const transaction of transactions) {
+          const existing = totals.get(transaction.productId) || {
+            productId: transaction.productId,
+            productName: transaction.productName,
+            quantity: 0,
+          };
+
+          existing.quantity += transaction.quantity;
+          totals.set(transaction.productId, existing);
+        }
+
+        return [...totals.values()].sort(
+          (a, b) =>
+            b.quantity - a.quantity ||
+            a.productName.localeCompare(b.productName, "de", { numeric: true }),
+        );
+      }
+
+      // Zeitstempel als lesbares Datum mit Uhrzeit und Sekunden ausgeben.
+      function bookingTime(timestamp) {
+        return new Intl.DateTimeFormat("de-DE", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }).format(new Date(timestamp));
+      }
+
+      function renderReport() {
+        const transactions = transactionsForPerson(activePerson.id);
+        const isOverview = reportView === "overview";
+
+        $("report-person").textContent = activePerson.name;
+        $("report-title").textContent = isOverview
+          ? "Bericht"
+          : reportView === "history"
+            ? "Buchungshistorie"
+            : "Statistik";
+        $("report-options").hidden = !isOverview;
+        $("report-content").hidden = isOverview;
+        $("report-back").hidden = isOverview;
+        $("report-list").replaceChildren();
+
+        if (isOverview) return;
+
+        const totalQuantity = transactions.reduce(
+          (sum, transaction) => sum + transaction.quantity,
+          0,
+        );
+        $("report-total").textContent =
+          `${totalQuantity} Getränke insgesamt · ${transactions.length} Buchungen`;
+
+        if (!transactions.length) {
+          const empty = document.createElement("li");
+          empty.className = "empty";
+          empty.textContent =
+            "Noch keine Buchungen für diese Person vorhanden.";
+          $("report-list").append(empty);
+          return;
+        }
+
+        if (reportView === "history") {
+          // Neueste Buchungen zuerst. Gespeicherte Preise bleiben auch bei Preisänderungen korrekt.
+          for (const transaction of transactions) {
+            const entry = document.createElement("li");
+            entry.className = "history-entry";
+
+            const product = document.createElement("strong");
+            product.textContent = `${transaction.quantity} × ${transaction.productName}`;
+
+            const time = document.createElement("time");
+            time.dateTime = transaction.createdAt;
+            time.textContent = bookingTime(transaction.createdAt);
+
+            const amount = document.createElement("span");
+            amount.textContent = `Einzelpreis: ${euro(transaction.unitPriceCents)} · Gesamtpreis: ${euro(transaction.totalCents)}`;
+
+            entry.append(product, time, amount);
+            $("report-list").append(entry);
+          }
+        } else {
+          // Die meistgebuchten Getränke stehen oben; Produkte ohne Buchung entfallen.
+          for (const statistic of statisticsFor(transactions)) {
+            const entry = document.createElement("li");
+            entry.className = "statistic-entry";
+
+            const product = document.createElement("span");
+            product.textContent = statistic.productName;
+
+            const count = document.createElement("strong");
+            count.textContent = `${statistic.quantity} mal`;
+
+            entry.append(product, count);
+            $("report-list").append(entry);
+          }
+        }
+      }
+
+      $("report").addEventListener("click", () => {
+        reportView = "overview";
+        renderReport();
+        showDialog("report-dialog");
+      });
+
+      $("show-history").addEventListener("click", () => {
+        reportView = "history";
+        renderReport();
+      });
+
+      $("show-statistics").addEventListener("click", () => {
+        reportView = "statistics";
+        renderReport();
+      });
+
+      $("report-back").addEventListener("click", () => {
+        reportView = "overview";
+        renderReport();
+      });
+
       // 16. Alle Schließen-Schaltflächen mit ihrem zugehörigen Popup verbinden.
       document
         .querySelectorAll("[data-close]")
@@ -1093,6 +1333,7 @@
           state = saved;
           updateAccount();
           if ($("people-dialog").open) renderPeople();
+          if ($("report-dialog").open) renderReport();
           if ($("product-dialog").open && !$("review-step").hidden) {
             review();
             showBookingError(
@@ -1113,6 +1354,7 @@
           updateAccount();
           resetDisplay();
           if ($("people-dialog").open) renderPeople();
+          if ($("report-dialog").open) renderReport();
           if ($("product-dialog").open && !$("review-step").hidden) {
             review();
             showBookingError(
