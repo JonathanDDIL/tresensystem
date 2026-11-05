@@ -52,6 +52,11 @@
       button:disabled {
         cursor: default;
       }
+
+      #save-balance:disabled {
+        background: var(--gray);
+        color: var(--black);
+      }
       button:active:not(:disabled) {
         transform: scale(0.98);
       }
@@ -920,7 +925,12 @@
             Änderung bleibt als Korrektur gespeichert; Getränkebuchungen bleiben
             erhalten.
           </p>
-          <button type="submit" class="primary positive">
+          <button
+            id="save-balance"
+            type="submit"
+            class="primary positive"
+            disabled
+          >
             Guthaben speichern
           </button>
         </form>
@@ -1606,20 +1616,42 @@
         const value = balanceFor($("balance-person").value);
         $("balance-current").textContent =
           `Aktuelles Guthaben (${monthKey()}): ${euro(value)}`;
-        $("new-balance").value = (value / 100).toFixed(2).replace(".", ",");
+        $("new-balance").value = "";
+        updateBalanceSaveButton();
+      }
+
+      // Dieselbe Europrüfung steuert den Speicherbutton und die Formularverarbeitung.
+      // Ganze Eurobeträge sowie eine oder zwei Nachkommastellen sind erlaubt.
+      function parseEuroInput(value) {
+        const input = value.trim();
+        if (!/^-?\d+(?:[.,]\d{1,2})?$/.test(input)) return null;
+
+        const cents = Math.round(Number(input.replace(",", ".")) * 100);
+        return Number.isSafeInteger(cents) ? cents : null;
+      }
+
+      function updateBalanceSaveButton() {
+        $("save-balance").disabled =
+          !storageReady || parseEuroInput($("new-balance").value) === null;
       }
 
       // Für jeden Monat wird der gespeicherte Kontostand ausgewertet, nicht nur der laufende Monat.
       function monthlyDebts(month, data = state) {
-        return data.people.map((person) => {
-          const balance = balanceFor(
-            person.id,
-            month,
-            data.transactions,
-            data.adjustments,
+        return data.people
+          .map((person) => {
+            const balance = balanceFor(
+              person.id,
+              month,
+              data.transactions,
+              data.adjustments,
+            );
+            return { ...person, balance, debt: Math.max(0, -balance) };
+          })
+          .sort(
+            (a, b) =>
+              b.debt - a.debt ||
+              a.name.localeCompare(b.name, "de", { numeric: true }),
           );
-          return { ...person, balance, debt: Math.max(0, -balance) };
-        });
       }
 
       function renderMonthlyReport() {
@@ -1664,10 +1696,8 @@
         }[view];
 
         if (view === "create") {
-          const number = nextPersonNumber();
-          $("new-person-name").value =
-            `Person ${String(number).padStart(2, "0")}`;
-          $("new-person-nfc").value = `NFC-${String(number).padStart(4, "0")}`;
+          $("new-person-name").value = "";
+          $("new-person-nfc").value = "";
         }
         if (view === "balance") updateAdminPersonOptions();
         if (view === "monthly") {
@@ -1736,6 +1766,7 @@
         showAdminView("overview"),
       );
       $("balance-person").addEventListener("change", updateAdminBalance);
+      $("new-balance").addEventListener("input", updateBalanceSaveButton);
       $("admin-month").addEventListener("input", renderMonthlyReport);
 
       $("create-person-form").addEventListener("submit", (event) => {
@@ -1768,10 +1799,8 @@
             );
           });
           adminMessage(`${name} wurde mit 0,00 € Guthaben angelegt.`);
-          const number = nextPersonNumber();
-          $("new-person-name").value =
-            `Person ${String(number).padStart(2, "0")}`;
-          $("new-person-nfc").value = `NFC-${String(number).padStart(4, "0")}`;
+          $("new-person-name").value = "";
+          $("new-person-nfc").value = "";
         } catch (error) {
           adminMessage(error.message, true);
         }
@@ -1781,14 +1810,11 @@
       $("change-balance-form").addEventListener("submit", (event) => {
         event.preventDefault();
         try {
-          const input = $("new-balance").value.trim();
-          if (!/^-?\d+(?:[.,]\d{1,2})?$/.test(input))
+          const targetCents = parseEuroInput($("new-balance").value);
+          if (targetCents === null)
             throw Error(
-              "Bitte einen Eurobetrag mit höchstens zwei Nachkommastellen eingeben.",
+              "Bitte einen gültigen Eurobetrag mit höchstens zwei Nachkommastellen eingeben.",
             );
-          const targetCents = Math.round(Number(input.replace(",", ".")) * 100);
-          if (!Number.isSafeInteger(targetCents))
-            throw Error("Dieser Betrag ist zu groß.");
           const personId = $("balance-person").value;
           saveAdminChange((next) => {
             if (!next.people.some((person) => person.id === personId))
