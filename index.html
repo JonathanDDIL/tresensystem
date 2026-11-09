@@ -20,6 +20,10 @@
         --green: #238636;
         --overlay: rgba(17, 17, 17, 0.35);
         --radius: 18px;
+        --button-pressed-scale: 0.96;
+        --button-pressed-brightness: 0.86;
+        --button-press-duration: 90ms;
+        --button-release-duration: 150ms;
         font-family: Arial, Helvetica, sans-serif;
         color: var(--black);
         background: var(--white);
@@ -43,6 +47,9 @@
         cursor: pointer;
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
+        transition:
+          transform var(--button-release-duration) ease-out,
+          filter var(--button-release-duration) ease-out;
       }
       button:focus-visible,
       input:focus-visible {
@@ -57,8 +64,23 @@
         background: var(--gray);
         color: var(--black);
       }
+      /* Einheitliches Druckfeedback für Maus, Touch und Tastatur.
+         Helligkeit und Größe verwenden die zentral deklarierten Werte. */
       button:active:not(:disabled) {
-        transform: scale(0.98);
+        transform: scale(var(--button-pressed-scale));
+        filter: brightness(var(--button-pressed-brightness));
+        transition-duration: var(--button-press-duration);
+      }
+
+      /* Bei reduzierter Bewegung bleibt das Abdunkeln als Druckfeedback erhalten. */
+      @media (prefers-reduced-motion: reduce) {
+        button {
+          transition: none;
+        }
+
+        button:active:not(:disabled) {
+          transform: none;
+        }
       }
       [hidden] {
         display: none !important;
