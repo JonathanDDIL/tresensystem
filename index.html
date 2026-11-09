@@ -21,8 +21,9 @@
         --overlay: rgba(17, 17, 17, 0.35);
         --radius: 18px;
         --button-pressed-scale: 0.85;
-        --button-pressed-brightness: 0.50;
-        --button-press-duration: 90ms;
+        --button-pressed-background: var(--black);
+        --button-pressed-text: var(--white);
+        --button-press-duration: 50ms;
         --button-release-duration: 350ms;
         font-family: Arial, Helvetica, sans-serif;
         color: var(--black);
@@ -49,7 +50,8 @@
         -webkit-tap-highlight-color: transparent;
         transition:
           transform var(--button-release-duration) ease-out,
-          filter var(--button-release-duration) ease-out;
+          background-color var(--button-release-duration) ease-out,
+          color var(--button-release-duration) ease-out;
       }
       button:focus-visible,
       input:focus-visible {
@@ -64,24 +66,28 @@
         background: var(--gray);
         color: var(--black);
       }
-      /* Einheitliches Druckfeedback für Maus, Touch und Tastatur.
-         Helligkeit und Größe verwenden die zentral deklarierten Werte. */
-      button:active:not(:disabled) {
+      /* Klarer Druckzustand für Maus, Touch und Tastatur.
+         Die Klasse hält das Feedback auch bei sehr kurzen Berührungen sichtbar. */
+      button:active:not(:disabled),
+      button.is-pressed:not(:disabled) {
         transform: scale(var(--button-pressed-scale));
-        filter: brightness(var(--button-pressed-brightness));
+        background-color: var(--button-pressed-background);
+        color: var(--button-pressed-text);
         transition-duration: var(--button-press-duration);
       }
 
-      /* Bei reduzierter Bewegung bleibt das Abdunkeln als Druckfeedback erhalten. */
+      /* Bei reduzierter Bewegung bleibt der deutliche Farbwechsel erhalten. */
       @media (prefers-reduced-motion: reduce) {
         button {
           transition: none;
         }
 
-        button:active:not(:disabled) {
+        button:active:not(:disabled),
+        button.is-pressed:not(:disabled) {
           transform: none;
         }
       }
+
       [hidden] {
         display: none !important;
       }
@@ -981,6 +987,65 @@
     <!-- JAVASCRIPT: Daten, Speicherung und Reaktionen auf die Bedienung. -->
     <script>
       "use strict";
+
+      // Druckfeedback zentral auslösen, auch für dynamisch erzeugte Buttons.
+      // Ein kurzer Tipp bleibt mindestens 240 ms sichtbar; Halten bleibt gedrückt.
+      const buttonPresses = new Map();
+      const minimumPressDuration = 240;
+
+      function pressButton(button) {
+        if (!button || button.disabled) return;
+        const previous = buttonPresses.get(button);
+        if (previous) clearTimeout(previous.timer);
+        buttonPresses.set(button, { startedAt: Date.now(), timer: null });
+        button.classList.add("is-pressed");
+      }
+
+      function releaseButton(button) {
+        const press = buttonPresses.get(button);
+        if (!press) return;
+        clearTimeout(press.timer);
+        const remaining = Math.max(0, minimumPressDuration - (Date.now() - press.startedAt));
+        press.timer = setTimeout(() => {
+          button.classList.remove("is-pressed");
+          buttonPresses.delete(button);
+        }, remaining);
+      }
+
+      document.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        pressButton(event.target.closest("button"));
+      }, true);
+
+      for (const eventName of ["pointerup", "pointercancel"]) {
+        document.addEventListener(eventName, () => {
+          for (const button of buttonPresses.keys()) releaseButton(button);
+        }, true);
+      }
+
+      // Klicks per Tastatur oder Hilfstechnologie erhalten dasselbe Feedback.
+      document.addEventListener("click", (event) => {
+        const button = event.target.closest("button");
+        if (!button || button.disabled) return;
+        if (!buttonPresses.has(button)) pressButton(button);
+        releaseButton(button);
+      }, true);
+
+      document.addEventListener("keydown", (event) => {
+        if (!event.repeat && (event.key === " " || event.key === "Enter")) {
+          pressButton(event.target.closest("button"));
+        }
+      }, true);
+
+      document.addEventListener("keyup", (event) => {
+        if (event.key === " " || event.key === "Enter") {
+          releaseButton(event.target.closest("button"));
+        }
+      }, true);
+
+      window.addEventListener("blur", () => {
+        for (const button of buttonPresses.keys()) releaseButton(button);
+      });
 
       // 1. Konfiguration: Name des lokalen Datenspeichers.
       const STORAGE_KEY = "tresensystem.v1";
