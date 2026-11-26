@@ -332,14 +332,14 @@
         justify-content: space-between;
         gap: 16px;
       }
-      .admin-heading {
+      .modal-heading {
         display: flex;
         align-items: center;
         gap: 10px;
         min-width: 0;
       }
 
-      #admin-back {
+      .modal-back {
         flex: none;
         display: grid;
         place-items: center;
@@ -348,7 +348,7 @@
         padding: 0;
       }
 
-      #admin-back svg {
+      .modal-back svg {
         width: 42px;
         height: 42px;
       }
@@ -492,18 +492,6 @@
       .error {
         color: var(--red-text);
         font-weight: 700;
-      }
-      .back {
-        padding: 0 14px;
-        min-height: 40px;
-        font-size: 15px;
-      }
-      .footer-buttons {
-        display: flex;
-        gap: 12px;
-      }
-      .footer-buttons .primary {
-        flex: 1;
       }
       .month {
         font-variant-numeric: tabular-nums;
@@ -862,6 +850,11 @@
       style="display: none"
       aria-hidden="true"
     >
+      <symbol id="modal-back-icon" viewBox="0 0 44 44">
+        <circle cx="22" cy="22" r="22" fill="var(--black)" />
+        <path d="M27 9.5 14.5 22 27 34.5" fill="none" stroke="var(--white)"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
       <symbol id="image-icon" viewBox="0 0 64 64">
         <rect
           x="9"
@@ -969,7 +962,12 @@
     <dialog id="product-dialog" class="modal" aria-labelledby="product-title">
       <div class="modal-body">
         <div class="modal-head">
-          <h2 id="product-title"></h2>
+          <div class="modal-heading">
+            <button id="back" class="modal-back" type="button" aria-label="Zurück" hidden>
+              <svg aria-hidden="true" focusable="false"><use href="#modal-back-icon" /></svg>
+            </button>
+            <h2 id="product-title"></h2>
+          </div>
           <button
             class="close"
             data-close="product-dialog"
@@ -1005,10 +1003,7 @@
         <section id="review-step" hidden>
           <dl id="details" class="details"></dl>
           <p id="booking-error" class="error" role="alert" hidden></p>
-          <div class="footer-buttons" style="margin-top: 24px">
-            <button id="back" class="back">Zurück</button
-            ><button id="book" class="primary positive">Buchen</button>
-          </div>
+          <button id="book" class="primary positive" style="margin-top: 24px">Buchen</button>
         </section>
       </div>
     </dialog>
@@ -1034,7 +1029,12 @@
     <dialog id="report-dialog" class="modal" aria-labelledby="report-title">
       <div class="modal-body">
         <div class="modal-head">
-          <h2 id="report-title">Bericht</h2>
+          <div class="modal-heading">
+            <button id="report-back" class="modal-back" type="button" aria-label="Zurück" hidden>
+              <svg aria-hidden="true" focusable="false"><use href="#modal-back-icon" /></svg>
+            </button>
+            <h2 id="report-title">Bericht</h2>
+          </div>
           <button
             class="close"
             data-close="report-dialog"
@@ -1067,9 +1067,6 @@
             style="margin-top: 16px"
           ></ul>
         </section>
-        <button id="report-back" class="back" hidden>
-          Zurück zur Übersicht
-        </button>
       </div>
     </dialog>
 
@@ -1121,13 +1118,9 @@
     <dialog id="bierwart-dialog" class="modal" aria-labelledby="bierwart-title">
       <div class="modal-body">
         <div class="modal-head">
-          <div class="admin-heading">
-            <button id="admin-back" type="button" aria-label="Zurück" hidden>
-              <svg viewBox="0 0 44 44" aria-hidden="true" focusable="false">
-                <circle cx="22" cy="22" r="22" fill="var(--black)" />
-                <path d="M27 9.5 14.5 22 27 34.5" fill="none" stroke="var(--white)"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
+          <div class="modal-heading">
+            <button id="admin-back" class="modal-back" type="button" aria-label="Zurück" hidden>
+              <svg aria-hidden="true" focusable="false"><use href="#modal-back-icon" /></svg>
             </button>
             <h2 id="bierwart-title">Bierwart</h2>
           </div>
@@ -1601,6 +1594,7 @@
         $("product-title").textContent = drink.name;
         $("quantity-step").hidden = false;
         $("review-step").hidden = true;
+        $("back").hidden = true;
         $("booking-error").hidden = true;
         updateQuantity();
         showDialog("product-dialog");
@@ -1641,6 +1635,7 @@
         reviewMonth = monthKey();
         $("quantity-step").hidden = true;
         $("review-step").hidden = false;
+        $("back").hidden = false;
         const values = [
           ["Produkt", selectedDrink.name],
           ["Anzahl", String(quantity)],
@@ -1670,6 +1665,7 @@
       $("back").addEventListener("click", () => {
         $("quantity-step").hidden = false;
         $("review-step").hidden = true;
+        $("back").hidden = true;
       });
 
       // 14. Buchung: Angaben prüfen, dauerhaft speichern und Bestätigung anzeigen.
@@ -2030,7 +2026,7 @@
             : "Statistik";
         $("report-options").hidden = !isOverview;
         $("report-content").hidden = isOverview;
-        $("report-back").hidden = isOverview || adminHistoryPersonId !== null;
+        $("report-back").hidden = isOverview;
         $("report-list").replaceChildren();
         const isStatistics = reportView === "statistics";
         $("statistics-content").hidden = !isStatistics;
@@ -2122,6 +2118,10 @@
       });
 
       $("report-back").addEventListener("click", () => {
+        if (adminHistoryPersonId !== null) {
+          $("report-dialog").close();
+          return;
+        }
         reportView = "overview";
         renderReport();
       });
