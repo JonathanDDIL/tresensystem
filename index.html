@@ -1193,7 +1193,7 @@
         <div id="admin-report-options" class="admin-form" hidden>
           <button id="admin-stock" class="primary">Virtueller Bestand</button>
           <button id="admin-inventory" class="primary">Inventur</button>
-          <button id="admin-delivery" class="primary" disabled>Lieferung</button>
+          <button id="admin-delivery" class="primary">Lieferung</button>
           <button id="admin-convent" class="primary">Conventsbericht</button>
         </div>
 
@@ -1204,11 +1204,11 @@
 
         <form id="admin-inventory-form" class="admin-form" hidden>
           <label class="admin-field">
-            Inventurdatum
+            <span id="inventory-date-label">Inventurdatum</span>
             <input id="inventory-date" type="date" required />
           </label>
           <fieldset id="inventory-fields" class="inventory-fields" hidden>
-            <legend>Gezählter Bestand in Flaschen</legend>
+            <legend id="inventory-legend">Gezählter Bestand in Flaschen</legend>
             <div id="inventory-items" class="admin-form"></div>
             <label class="admin-field">
               Neues Getränk
@@ -1220,6 +1220,7 @@
         </form>
 
         <section id="admin-report-calendar" aria-label="Zeitraum auswählen" hidden>
+          <button type="button" class="primary" disabled>Conventsbericht herunterladen</button>
           <div class="statistics-month-nav">
             <button type="button" id="range-previous" aria-label="Vorheriger Monat">‹</button>
             <strong id="range-month" aria-live="polite"></strong>
@@ -2285,6 +2286,7 @@
         count.step = "1";
         count.inputMode = "numeric";
         count.required = true;
+        if (adminView === "delivery") count.value = "0";
         count.dataset.drink = name;
         label.append(name, count);
         $("inventory-items").append(label);
@@ -2311,6 +2313,8 @@
         $("inventory-items").lastElementChild.querySelector("input").focus();
       });
 
+      let pendingDelivery = null;
+
       $("admin-inventory-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         const save = $("inventory-save");
@@ -2319,15 +2323,24 @@
         const items = [...$("inventory-items").querySelectorAll("input")].map((input) => ({
           name: input.dataset.drink, bottles: input.valueAsNumber,
         }));
+        const view = adminView;
+        const delivery = view === "delivery";
+        const change = { action: delivery ? "record-delivery" : "record-inventory", date, items };
+        if (delivery) {
+          const key = JSON.stringify(change);
+          if (pendingDelivery?.key !== key) pendingDelivery = { key, id: crypto.randomUUID() };
+          change.id = pendingDelivery.id;
+        }
         save.disabled = true;
         try {
-          await saveAdminChange({ action: "record-inventory", date, items });
-          if (adminView === "inventory") {
+          await saveAdminChange(change);
+          if (delivery) pendingDelivery = null;
+          if (adminView === view) {
             showAdminView("stock");
-            adminMessage("Inventur eingetragen.");
+            adminMessage(delivery ? "Lieferung eingetragen." : "Inventur eingetragen.");
           }
         } catch (error) {
-          if (adminView === "inventory") adminMessage(error.message, true);
+          if (adminView === view) adminMessage(error.message, true);
         } finally {
           save.disabled = false;
         }
@@ -2341,7 +2354,7 @@
         $("monthly-report").hidden = view !== "monthly";
         $("admin-report-options").hidden = view !== "report";
         $("admin-stock-view").hidden = view !== "stock";
-        $("admin-inventory-form").hidden = view !== "inventory";
+        $("admin-inventory-form").hidden = view !== "inventory" && view !== "delivery";
         $("admin-report-calendar").hidden = view !== "convent";
         $("admin-back").hidden = view === "overview";
         $("admin-message").hidden = true;
@@ -2353,6 +2366,7 @@
           report: "Bericht",
           stock: "Virtueller Bestand",
           inventory: "Inventur",
+          delivery: "Lieferung",
           convent: "Conventsbericht",
         }[view];
 
@@ -2366,7 +2380,11 @@
           updateAdminBalance(true);
         }
         if (view === "stock") renderStock();
-        if (view === "inventory") {
+        if (view === "inventory" || view === "delivery") {
+          const delivery = view === "delivery";
+          $("inventory-date-label").textContent = delivery ? "Lieferdatum" : "Inventurdatum";
+          $("inventory-legend").textContent = delivery ? "Gelieferte Flaschen" : "Gezählter Bestand in Flaschen";
+          $("inventory-save").textContent = delivery ? "Lieferung eintragen" : "Inventur eintragen";
           $("admin-inventory-form").reset();
           $("inventory-date").max = inventoryDayFormat.format(new Date());
           $("inventory-fields").hidden = true;
@@ -2464,9 +2482,10 @@
       $("admin-report").addEventListener("click", () => showAdminView("report"));
       $("admin-stock").addEventListener("click", () => showAdminView("stock"));
       $("admin-inventory").addEventListener("click", () => showAdminView("inventory"));
+      $("admin-delivery").addEventListener("click", () => showAdminView("delivery"));
       $("admin-convent").addEventListener("click", () => showAdminView("convent"));
       $("admin-back").addEventListener("click", () =>
-        showAdminView(["stock", "inventory", "convent"].includes(adminView) ? "report" : "overview"),
+        showAdminView(["stock", "inventory", "delivery", "convent"].includes(adminView) ? "report" : "overview"),
       );
       $("new-balance").addEventListener("input", updateBalanceSaveButton);
       $("edit-beer-name").addEventListener("input", updateBalanceSaveButton);

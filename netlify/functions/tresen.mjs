@@ -93,13 +93,14 @@ function ensureInventory(data) {
   return data;
 }
 
-function recordInventory(data, input, now) {
+function recordStockChange(data, input, now) {
+  const delivery = input.action === "record-delivery";
   const date = input.date;
   const validDate = typeof date === "string" && /^[1-9][0-9]{3}-[0-9]{2}-[0-9]{2}$/.test(date)
     ? new Date(date + "T00:00:00Z") : null;
   requireInput(validDate && Number.isFinite(validDate.getTime()) &&
     validDate.toISOString().slice(0, 10) === date && date <= inventoryDateFormat.format(now),
-    "Bitte ein gültiges Inventurdatum bis heute auswählen.");
+    "Bitte ein gültiges Datum bis heute auswählen.");
   requireInput(Array.isArray(input.items) && input.items.length <= 250,
     "Ungültige Getränkeliste.");
   const names = new Set();
@@ -112,17 +113,43 @@ function recordInventory(data, input, now) {
     names.add(inventoryKey(name));
     return { name, bottles: entry.bottles };
   });
+  if (delivery) {
+    requireInput(typeof input.id === "string" && /^[0-9a-f-]{36}$/i.test(input.id),
+      "Ungültige Lieferkennung.");
+    const deliveries = data.inventory.deliveries ??= [];
+    const previous = deliveries.find(({ id }) => id === input.id);
+    if (previous) {
+      requireInput(previous.date === date && previous.items.length === stock.length &&
+        previous.items.every((item, index) => item.name === stock[index].name &&
+          item.bottles === stock[index].bottles), "Lieferkennung bereits vergeben.");
+      return { duplicate: true };
+    }
+    requireInput(stock.some(({ bottles }) => bottles > 0), "Bitte mindestens eine gelieferte Flasche eintragen.");
+    const current = new Map(data.inventory.stock.map((item) => [inventoryKey(item.name), item]));
+    for (const { name, bottles } of stock) {
+      const key = inventoryKey(name);
+      const existing = current.get(key);
+      if (existing && bottles === 0) continue;
+      const total = (existing?.bottles ?? 0) + bottles;
+      requireInput(Number.isSafeInteger(total), "Der Flaschenbestand ist zu groß.");
+      current.set(key, { name: existing?.name ?? name, bottles: total });
+    }
+    data.inventory.stock = [...current.values()];
+    deliveries.push({ id: input.id, date, recordedAt: now.toISOString(), items: stock });
+    return {};
+  }
+
   requireInput(data.inventory.stock.every(({ name }) => names.has(inventoryKey(name))),
     "Die Getränkeliste wurde geändert. Bitte die Inventur erneut öffnen.");
   data.inventory.stock = stock;
   data.inventory.counts.push({ date, recordedAt: now.toISOString(), items: stock });
+  return {};
 }
 
 function applyChange(data, input) {
   requireInput(input && typeof input === "object", "Ungültige Anfrage.");
-  if (input.action === "record-inventory") {
-    recordInventory(ensureInventory(data), input, new Date());
-    return {};
+  if (input.action === "record-inventory" || input.action === "record-delivery") {
+    return recordStockChange(ensureInventory(data), input, new Date());
   }
   if (input.action === "create-person") {
     createPerson(data, input);
