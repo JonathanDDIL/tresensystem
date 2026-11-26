@@ -38,18 +38,19 @@ function requireInput(valid, message) {
 }
 
 function createPerson(data, input) {
+  const beerName = typeof input.beerName === "string" ? input.beerName.trim() : "";
   const name = typeof input.name === "string" ? input.name.trim() : "";
   const nfcId = typeof input.nfcId === "string" ? input.nfcId.trim() : "";
-  requireInput(name && name.length <= 80 && nfcId && nfcId.length <= 120,
-    "Bitte gültigen Namen und NFC-Kennung eingeben.");
+  requireInput(beerName && beerName.length <= 80 && name && name.length <= 80 && nfcId && nfcId.length <= 120,
+    "Bitte gültigen Biernamen, Vor- und Nachnamen und NFC-Kennung eingeben.");
   requireInput(!data.people.some((person) =>
-    person.name.toLocaleLowerCase("de") === name.toLocaleLowerCase("de")),
-    "Dieser Name ist bereits vergeben.");
+    (person.beerName || person.name).toLocaleLowerCase("de") === beerName.toLocaleLowerCase("de")),
+    "Dieser Biername ist bereits vergeben.");
   requireInput(!data.people.some((person) => person.nfcId === nfcId),
     "Diese NFC-Kennung ist bereits vergeben.");
   const number = Math.max(...data.people.map((person) =>
     Number(person.id.slice("person-".length)))) + 1;
-  data.people.push({ id: "person-" + String(number).padStart(2, "0"), name, nfcId });
+  data.people.push({ id: "person-" + String(number).padStart(2, "0"), beerName, name, nfcId });
 }
 
 function setBalance(data, person, input, month, createdAt) {
@@ -102,7 +103,7 @@ function applyChange(data, input) {
 
   const unitPriceCents = 100;
   const transaction = {
-    id, personId: person.id, personName: person.name, nfcId: person.nfcId,
+    id, personId: person.id, personName: person.name, beerName: person.beerName, nfcId: person.nfcId,
     productId, productName: "Getränk " + productId.slice(-1), quantity,
     unitPriceCents, totalCents: quantity * unitPriceCents, createdAt, month,
   };

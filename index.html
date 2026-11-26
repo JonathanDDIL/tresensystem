@@ -14,6 +14,7 @@
         --white: #ffffff;
         --black: #000000;
         --gray: #eeeeee;
+        --name-muted: color-mix(in srgb, var(--black) 55%, var(--white));
         --red: #ff0000;
         --line: color-mix(in srgb, var(--gray) 90%, var(--black));
         --red-text: color-mix(in srgb, var(--red) 72%, var(--black));
@@ -169,6 +170,15 @@
         font-weight: 700;
         padding: 12px 22px;
       }
+      .real-name {
+        display: block;
+        color: var(--name-muted);
+        font-size: 0.75rem;
+        font-weight: 400;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+      }
+
       .account {
         grid-column: 1 / -1;
         overflow-wrap: anywhere;
@@ -699,7 +709,7 @@
         <button id="report" class="report-button">Bericht</button>
         <button id="bierwart" class="people-button">Bierwart</button>
         <div class="account">
-          <div>Angemeldet als: <strong id="person-name"></strong></div>
+          <div>Angemeldet als: <span id="person-name"></span></div>
           <div id="account-balance" class="balance"></div>
         </div>
       </header>
@@ -904,7 +914,11 @@
 
         <form id="create-person-form" class="admin-form" hidden>
           <label class="admin-field"
-            >Name
+            >Biername
+            <input id="new-person-beer-name" autocomplete="off" maxlength="80" required />
+          </label>
+          <label class="admin-field"
+            >Vor- und Nachname
             <input
               id="new-person-name"
               autocomplete="off"
@@ -934,6 +948,7 @@
             >Person
             <select id="balance-person" required></select>
           </label>
+          <span id="balance-real-name" class="real-name"></span>
           <p id="balance-current" class="report-caption"></p>
           <label class="admin-field"
             >Neues Guthaben in Euro
@@ -988,12 +1003,10 @@
 
       const API_URL = "/.netlify/functions/tresen";
 
-      // 2. Personen: feste IDs, Anzeigenamen und eindeutige NFC-Platzhalter.
-      let people = Array.from({ length: 99 }, (_, i) => ({
-        id: `person-${String(i + 1).padStart(2, "0")}`,
-        name: `Person ${String(i + 1).padStart(2, "0")}`,
-        nfcId: `NFC-${String(i + 1).padStart(4, "0")}`,
-      })).sort((a, b) => a.name.localeCompare(b.name, "de"));
+      let people = [];
+      const beerNameOf = (person) => person.beerName || person.name;
+      const comparePeople = (a, b) =>
+        beerNameOf(a).localeCompare(beerNameOf(b), "de", { numeric: true });
 
       // 3. Getränke: IDs, Namen und Preise in Cent. 100 Cent entsprechen 1 Euro.
       const drinks = Array.from({ length: 9 }, (_, i) => ({
@@ -1046,7 +1059,7 @@
         if (!data || data.version !== 1 || !Array.isArray(data.transactions))
           return false;
 
-        const users = data.people || people;
+        const users = data.people;
         const adjustments = data.adjustments || [];
         const knownPerson = (id) => users.some((person) => person.id === id);
         const validMonth = (value) => /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
@@ -1109,11 +1122,7 @@
       function normalizeState(data) {
         return {
           ...data,
-          people: (data.people || people)
-            .map((person) => ({ ...person }))
-            .sort((a, b) =>
-              a.name.localeCompare(b.name, "de", { numeric: true }),
-            ),
+          people: [...(data.people || [])].sort(comparePeople),
           adjustments: data.adjustments || [],
         };
       }
@@ -1146,7 +1155,7 @@
         state = normalizeState(saved);
         people = state.people;
         activePerson =
-          people.find((person) => person.id === activePerson.id) || people[0];
+          people.find((person) => person.id === (activePerson?.id || "person-01")) || people[0];
         storageReady = true;
         updateAccount();
       }
@@ -1166,7 +1175,7 @@
       }
 
       // 6. Bedienzustand: aktive Person, gewähltes Getränk und offene Eingaben.
-      let activePerson = people[0],
+      let activePerson = null,
         selectedDrink = null,
         quantity = 1,
         digits = "",
@@ -1179,10 +1188,24 @@
       const imageMarkup =
         '<svg aria-hidden="true"><use href="#image-icon"/></svg>';
 
+      function renderPersonName(element, person) {
+        element.replaceChildren();
+        if (!person) return;
+        const mainName = document.createElement("b");
+        mainName.textContent = beerNameOf(person);
+        element.append(mainName);
+        if (person.beerName && person.beerName !== person.name) {
+          const realName = document.createElement("small");
+          realName.className = "real-name";
+          realName.textContent = person.name;
+          element.append(realName);
+        }
+      }
+
       // Name, aktuelles Monatsguthaben und Speichermeldungen aktualisieren.
       function updateAccount() {
-        $("person-name").textContent = activePerson.name;
-        $("account-balance").textContent = euro(balanceFor(activePerson.id));
+        renderPersonName($("person-name"), activePerson);
+        $("account-balance").textContent = activePerson ? euro(balanceFor(activePerson.id)) : "";
         $("month").textContent = new Intl.DateTimeFormat("de-DE", {
           timeZone: "Europe/Berlin",
           month: "long",
@@ -1198,13 +1221,13 @@
 
       // Vor der Buchung zeigt das Anzeigefeld den Namen des aktiven Kontos.
       function resetDisplay() {
-        $("display-title").textContent = activePerson.name;
+        renderPersonName($("display-title"), activePerson);
         $("receipt").replaceChildren();
         $("receipt").hidden = true;
         $("display-title").closest(".display").classList.remove("has-booking");
       }
 
-      // 8. Chip-Schaltfläche: Hauptseite mit Person 01 als aktivem Konto öffnen.
+      // 8. Chip-Schaltfläche: Hauptseite mit dem ersten Testkonto öffnen.
       $("scan").addEventListener("click", async () => {
         $("scan").disabled = true;
         await refreshState();
@@ -1218,7 +1241,7 @@
       function renderPeople() {
         const search = $("person-search").value.trim().toLocaleLowerCase("de");
         const matches = people.filter((p) =>
-          p.name.toLocaleLowerCase("de").includes(search),
+          [beerNameOf(p), p.name].some((name) => name.toLocaleLowerCase("de").includes(search)),
         );
         $("people-list").replaceChildren();
         for (const person of matches) {
@@ -1229,7 +1252,7 @@
             String(person.id === activePerson.id),
           );
           const name = document.createElement("span");
-          name.textContent = person.name;
+          renderPersonName(name, person);
           const balance = document.createElement("span");
           balance.className = "balance";
           balance.textContent = euro(balanceFor(person.id));
@@ -1393,7 +1416,7 @@
           title.textContent = `${transaction.quantity} × ${transaction.productName}`;
           $("receipt").append(title);
           for (const [label, value] of [
-            ["Gebucht für", transaction.personName],
+            ["Gebucht für", activePerson],
             ["Gesamtpreis", euro(transaction.totalCents)],
             ["Neues Guthaben", euro(balanceFor(activePerson.id))],
           ]) {
@@ -1402,7 +1425,8 @@
             const key = document.createElement("span"),
               val = document.createElement("span");
             key.textContent = label;
-            val.textContent = value;
+            if (label === "Gebucht für") renderPersonName(val, value);
+            else val.textContent = value;
             if (label === "Neues Guthaben") val.className = "balance";
             line.append(key, val);
             $("receipt").append(line);
@@ -1537,7 +1561,7 @@
         const transactions = transactionsForPerson(activePerson.id);
         const isOverview = reportView === "overview";
 
-        $("report-person").textContent = activePerson.name;
+        renderPersonName($("report-person"), activePerson);
         $("report-title").textContent = isOverview
           ? "Bericht"
           : reportView === "history"
@@ -1644,7 +1668,7 @@
         for (const person of people) {
           const option = document.createElement("option");
           option.value = person.id;
-          option.textContent = person.name;
+          option.textContent = beerNameOf(person);
           $("balance-person").append(option);
         }
 
@@ -1657,6 +1681,8 @@
       }
 
       function updateAdminBalance() {
+        const person = people.find(({ id }) => id === $("balance-person").value);
+        $("balance-real-name").textContent = person?.beerName && person.beerName !== person.name ? person.name : "";
         const value = balanceFor($("balance-person").value);
         $("balance-current").textContent =
           `Aktuelles Guthaben (${monthKey()}): ${euro(value)}`;
@@ -1694,7 +1720,7 @@
           .sort(
             (a, b) =>
               b.debt - a.debt ||
-              a.name.localeCompare(b.name, "de", { numeric: true }),
+              comparePeople(a, b),
           );
       }
 
@@ -1715,7 +1741,7 @@
           const row = document.createElement("li");
           row.className = "statistic-entry";
           const name = document.createElement("span");
-          name.textContent = person.name;
+          renderPersonName(name, person);
           const debt = document.createElement("strong");
           debt.className = "balance";
           debt.textContent = euro(person.debt);
@@ -1740,6 +1766,7 @@
         }[view];
 
         if (view === "create") {
+          $("new-person-beer-name").value = "";
           $("new-person-name").value = "";
           $("new-person-nfc").value = "";
         }
@@ -1801,15 +1828,17 @@
 
       $("create-person-form").addEventListener("submit", async (event) => {
         event.preventDefault();
+        const beerName = $("new-person-beer-name").value.trim();
         const name = $("new-person-name").value.trim();
         const nfcId = $("new-person-nfc").value.trim();
         try {
-          if (!name || !nfcId)
-            throw Error("Bitte Name und NFC-Kennung eingeben.");
-          if (name.length > 80 || nfcId.length > 120)
+          if (!beerName || !name || !nfcId)
+            throw Error("Bitte Biername, Vor- und Nachname und NFC-Kennung eingeben.");
+          if (beerName.length > 80 || name.length > 80 || nfcId.length > 120)
             throw Error("Name oder NFC-Kennung ist zu lang.");
-          await saveAdminChange({ action: "create-person", name, nfcId });
-          adminMessage(`${name} wurde mit 0,00 € Guthaben angelegt.`);
+          await saveAdminChange({ action: "create-person", beerName, name, nfcId });
+          adminMessage(`${beerName} wurde mit 0,00 € Guthaben angelegt.`);
+          $("new-person-beer-name").value = "";
           $("new-person-name").value = "";
           $("new-person-nfc").value = "";
         } catch (error) {
