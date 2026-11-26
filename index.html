@@ -509,21 +509,30 @@
         list-style: none;
       }
 
-      .history-entry,
+      .history-entry details,
       .statistic-entry {
         padding: 16px;
         border: 1px solid var(--line);
         border-radius: 12px;
       }
 
-      .history-entry {
-        display: grid;
-        gap: 10px;
+      .history-entry details {
+        padding: 0;
         line-height: 1.5;
+      }
+
+      .history-entry summary {
+        padding: 8px 12px;
+        cursor: pointer;
       }
 
       .history-entry time {
         font-size: 14px;
+        margin-inline-start: 8px;
+      }
+
+      .history-prices {
+        padding: 0 12px 10px;
       }
 
       .statistic-entry {
@@ -840,10 +849,6 @@
           </button>
         </div>
         <p id="report-person" class="report-person"></p>
-        <p class="report-caption">
-          Alle gespeicherten Monate. Datum und Uhrzeit werden
-          in der lokalen Zeitzone angezeigt.
-        </p>
         <div id="report-options" class="report-options">
           <button id="show-history" class="primary">Buchungshistorie</button>
           <button id="show-statistics" class="primary">Statistik</button>
@@ -1565,7 +1570,7 @@
         );
       }
 
-      // Zeitstempel als lesbares Datum mit Uhrzeit und Sekunden ausgeben.
+      // Zeitstempel als lesbares Datum mit Uhrzeit ausgeben.
       function bookingTime(timestamp) {
         return new Intl.DateTimeFormat("de-DE", {
           day: "2-digit",
@@ -1573,7 +1578,6 @@
           year: "numeric",
           hour: "2-digit",
           minute: "2-digit",
-          second: "2-digit",
         }).format(new Date(timestamp));
       }
 
@@ -1598,6 +1602,7 @@
           (sum, transaction) => sum + transaction.quantity,
           0,
         );
+        $("report-total").className = reportView === "history" ? "report-caption" : "report-total";
         $("report-total").textContent =
           `${totalQuantity} Getränke insgesamt · ${transactions.length} Buchungen`;
 
@@ -1623,10 +1628,21 @@
             time.dateTime = transaction.createdAt;
             time.textContent = bookingTime(transaction.createdAt);
 
-            const amount = document.createElement("span");
-            amount.textContent = `Einzelpreis: ${euro(transaction.unitPriceCents)} · Gesamtpreis: ${euro(transaction.totalCents)}`;
+            const details = document.createElement("details");
+            const summary = document.createElement("summary");
+            summary.append(product, " ", time);
 
-            entry.append(product, time, amount);
+            const prices = document.createElement("div");
+            prices.className = "history-prices";
+            const unit = document.createElement("p");
+            unit.textContent = `Einzelpreis: ${euro(transaction.unitPriceCents)}`;
+            const total = document.createElement("p");
+            const totalValue = document.createElement("strong");
+            totalValue.textContent = euro(transaction.totalCents);
+            total.append("Gesamtpreis: ", totalValue);
+            prices.append(unit, total);
+            details.append(summary, prices);
+            entry.append(details);
             $("report-list").append(entry);
           }
         } else {
