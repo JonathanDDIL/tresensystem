@@ -53,12 +53,16 @@ function createPerson(data, input) {
   data.people.push({ id: "person-" + String(number).padStart(2, "0"), beerName, name, nfcId });
 }
 
-function setBalance(data, person, input, month, createdAt) {
-  requireInput(Number.isSafeInteger(input.targetCents), "Ungültiger Eurobetrag.");
-  const belongs = (entry) => entry.personId === person.id && entry.month === month;
+function balanceAt(data, personId, month) {
+  const belongs = (entry) => entry.personId === personId && entry.month === month;
   const purchases = data.transactions.filter(belongs).reduce((sum, entry) => sum + entry.totalCents, 0);
   const corrections = data.adjustments.filter(belongs).reduce((sum, entry) => sum + entry.amountCents, 0);
-  const amountCents = input.targetCents - (corrections - purchases);
+  return corrections - purchases;
+}
+
+function setBalance(data, person, input, month, createdAt) {
+  requireInput(Number.isSafeInteger(input.targetCents), "Ungültiger Eurobetrag.");
+  const amountCents = input.targetCents - balanceAt(data, person.id, month);
   requireInput(Number.isSafeInteger(amountCents), "Ungültiger Eurobetrag.");
   if (amountCents !== 0) {
     data.adjustments.push({
@@ -108,6 +112,7 @@ function applyChange(data, input) {
     unitPriceCents, totalCents: quantity * unitPriceCents, createdAt, month,
   };
   data.transactions.push(transaction);
+  transaction.balanceAfterCents = balanceAt(data, person.id, month);
   return { transaction };
 }
 

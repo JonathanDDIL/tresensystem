@@ -522,13 +522,26 @@
       }
 
       .history-entry summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 2px 8px;
+        list-style: none;
         padding: 8px 12px;
         cursor: pointer;
       }
 
+      .history-entry summary::-webkit-details-marker {
+        display: none;
+      }
+
       .history-entry time {
         font-size: 14px;
-        margin-inline-start: 8px;
+      }
+
+      .history-entry summary .balance {
+        margin-inline-start: auto;
+        white-space: nowrap;
       }
 
       .history-prices {
@@ -1570,6 +1583,25 @@
         );
       }
 
+      function bookingBalances(personId) {
+        const events = [
+          ...state.adjustments
+            .filter((entry) => entry.personId === personId)
+            .map((entry) => ({ ...entry, delta: entry.amountCents })),
+          ...state.transactions.filter((entry) => entry.personId === personId).map((entry) => ({
+            ...entry, delta: -entry.totalCents, booking: true,
+          })),
+        ].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+        const byMonth = new Map();
+        const result = new Map();
+        for (const event of events) {
+          const reconstructed = (byMonth.get(event.month) || 0) + event.delta;
+          byMonth.set(event.month, reconstructed);
+          if (event.booking) result.set(event.id, event.balanceAfterCents ?? reconstructed);
+        }
+        return result;
+      }
+
       // Zeitstempel als lesbares Datum mit Uhrzeit ausgeben.
       function bookingTime(timestamp) {
         return new Intl.DateTimeFormat("de-DE", {
@@ -1616,6 +1648,7 @@
         }
 
         if (reportView === "history") {
+          const balances = bookingBalances(activePerson.id);
           // Neueste Buchungen zuerst. Gespeicherte Preise bleiben auch bei Preisänderungen korrekt.
           for (const transaction of transactions) {
             const entry = document.createElement("li");
@@ -1630,7 +1663,11 @@
 
             const details = document.createElement("details");
             const summary = document.createElement("summary");
-            summary.append(product, " ", time);
+            const balance = document.createElement("strong");
+            balance.className = "balance";
+            balance.textContent = euro(balances.get(transaction.id));
+            balance.setAttribute("aria-label", `Guthaben nach der Buchung: ${balance.textContent}`);
+            summary.append(product, time, balance);
 
             const prices = document.createElement("div");
             prices.className = "history-prices";
