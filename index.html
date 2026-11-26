@@ -187,30 +187,36 @@
         border-top: 4px solid var(--red);
         border-radius: var(--radius);
         padding: clamp(16px, 3vw, 28px);
-        display: flex;
-        flex-direction: column;
+        display: grid;
+        grid-template-rows: 1fr auto 1fr;
         gap: 18px;
         min-height: 0;
-        overflow: hidden;
+        overflow: auto;
+      }
+      .display.has-booking {
+        grid-template-rows: auto auto 1fr;
       }
       .display-head {
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-self: start;
         gap: 12px;
         font-size: 14px;
       }
+      .display-content {
+        min-width: 0;
+        justify-self: center;
+        overflow-wrap: anywhere;
+      }
       .display h1 {
         font-size: clamp(22px, 4vw, 34px);
-      }
-      .hint {
-        font-size: clamp(15px, 2.5vw, 20px);
-        line-height: 1.5;
+        text-align: center;
       }
       .receipt {
         display: flex;
         flex-direction: column;
         gap: 10px;
+        margin-top: 10px;
       }
       .receipt strong {
         font-size: clamp(20px, 4vw, 32px);
@@ -221,12 +227,6 @@
         gap: 16px;
         font-size: clamp(15px, 2.5vw, 20px);
       }
-      .storage-note {
-        margin-top: auto;
-        font-size: 12px;
-        line-height: 1.4;
-      }
-
       /* 7. Getränkeraster: vier Spalten und drei Zeilen */
       .grid {
         display: grid;
@@ -582,9 +582,6 @@
         .product-image svg {
           max-height: 38px;
         }
-        .storage-note {
-          font-size: 10px;
-        }
         .modal-body {
           padding: 16px;
           gap: 12px;
@@ -702,17 +699,13 @@
       <!-- Anzeigefeld für die aktuelle Auswahl und die letzte erfolgreiche Buchung. -->
       <section class="display" aria-label="Aktuelle Buchung">
         <div class="display-head">
-          <span>TRESENSYSTEM DRESDEN</span
-          ><span id="month" class="month"></span>
+          <span>Tresensystem Dresden</span>
+          <span id="month" class="month"></span>
         </div>
-        <h1 id="display-title">Getränk auswählen</h1>
-        <div id="receipt" class="receipt" aria-live="polite">
-          <p class="hint">Wähle ein Getränk und die gewünschte Anzahl.</p>
+        <div class="display-content">
+          <h1 id="display-title"></h1>
+          <div id="receipt" class="receipt" aria-live="polite" hidden></div>
         </div>
-        <p class="storage-note">
-          Buchungsdaten werden auf diesem Gerät gespeichert. Monatsjournale
-          bleiben erhalten. Kein automatischer Versand.
-        </p>
         <p id="storage-error" class="error" role="alert" hidden></p>
       </section>
       <!-- Die zwölf Raster-Schaltflächen werden im JavaScript erzeugt. -->
@@ -1162,14 +1155,12 @@
         $(id).showModal();
       }
 
-      // Das obere Anzeigefeld auf die Getränkeauswahl zurücksetzen.
+      // Vor der Buchung zeigt das Anzeigefeld den Namen des aktiven Kontos.
       function resetDisplay() {
-        $("display-title").textContent = "Getränk auswählen";
+        $("display-title").textContent = activePerson.name;
         $("receipt").replaceChildren();
-        const hint = document.createElement("p");
-        hint.className = "hint";
-        hint.textContent = "Wähle ein Getränk und die gewünschte Anzahl.";
-        $("receipt").append(hint);
+        $("receipt").hidden = true;
+        $("display-title").closest(".display").classList.remove("has-booking");
       }
 
       // 8. Chip-Schaltfläche: Hauptseite mit Person 01 als aktivem Konto öffnen.
@@ -1177,6 +1168,7 @@
         $("start").hidden = true;
         $("app").hidden = false;
         updateAccount();
+        resetDisplay();
       });
 
       // 9. Personenwahl: Suchtext filtern, Guthaben anzeigen und Auswahl übernehmen.
@@ -1362,6 +1354,8 @@
           state = next;
           updateAccount();
           $("display-title").textContent = "Buchung erfolgreich";
+          $("display-title").closest(".display").classList.add("has-booking");
+          $("receipt").hidden = false;
           $("receipt").replaceChildren();
           const title = document.createElement("strong");
           title.textContent = `${quantity} × ${selectedDrink.name}`;
