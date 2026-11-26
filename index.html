@@ -359,12 +359,14 @@
       }
 
       .modal-back svg {
-        width: 42px;
-        height: 42px;
+        width: 25px;
+        height: 25px;
       }
 
       .modal-head h2 {
+        min-width: 0;
         font-size: 24px;
+        white-space: nowrap;
       }
       .close {
         width: 48px;
@@ -861,9 +863,8 @@
       aria-hidden="true"
     >
       <symbol id="modal-back-icon" viewBox="0 0 44 44">
-        <circle cx="22" cy="22" r="22" fill="var(--black)" />
-        <path d="M27 9.5 14.5 22 27 34.5" fill="none" stroke="var(--white)"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M27 9.5 14.5 22 27 34.5" fill="none" stroke="var(--black)"
+          stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
       </symbol>
       <symbol id="image-icon" viewBox="0 0 64 64">
         <rect
@@ -2628,6 +2629,27 @@
           updateBalanceSaveButton();
         }
       });
+
+      // Dialogtitel bei Platzmangel einzeilig halten.
+      const titleMeasure = document.createElement("canvas").getContext("2d");
+      const dialogTitles = document.querySelectorAll(".modal-head h2");
+      function fitDialogTitle(title) {
+        const width = title.clientWidth;
+        if (!width || !title.textContent || !titleMeasure) return;
+        const style = getComputedStyle(title);
+        titleMeasure.font = `${style.fontWeight} 24px ${style.fontFamily}`;
+        const naturalWidth = titleMeasure.measureText(title.textContent).width;
+        const size = `${Math.min(24, Math.floor(240 * width / naturalWidth) / 10)}px`;
+        if (title.style.fontSize !== size) title.style.fontSize = size;
+      }
+      const titleResize = new ResizeObserver((entries) => {
+        for (const { target } of entries) fitDialogTitle(target);
+      });
+      for (const title of dialogTitles) {
+        titleResize.observe(title);
+        new MutationObserver(() => fitDialogTitle(title))
+          .observe(title, { childList: true, characterData: true, subtree: true });
+      }
 
       // 16. Alle Schließen-Schaltflächen mit ihrem zugehörigen Popup verbinden.
       document
