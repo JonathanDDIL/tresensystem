@@ -179,6 +179,17 @@
         overflow-wrap: anywhere;
       }
 
+      #people {
+        display: grid;
+        place-items: center;
+        padding-inline: 16px;
+      }
+
+      #people svg {
+        width: 24px;
+        height: 24px;
+      }
+
       .account {
         grid-column: 1 / -1;
         overflow-wrap: anywhere;
@@ -661,6 +672,13 @@
         color: var(--red-text);
       }
 
+      .monthly-list .statistic-entry {
+        width: 100%;
+        align-items: center;
+        background: var(--white);
+        text-align: start;
+      }
+
       .monthly-list {
         margin: 0;
         padding: 0;
@@ -797,7 +815,13 @@
     <main id="app" class="screen app" hidden>
       <!-- Kopfzeile mit Personenwahl, aktivem Namen und Guthaben. -->
       <header class="topbar">
-        <button id="people" class="people-button">Personen</button>
+        <button id="people" class="people-button" aria-label="Personen" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="7" r="4" />
+            <path d="M4 21v-1a8 8 0 0 1 16 0v1Z" />
+          </svg>
+        </button>
         <button id="report" class="report-button">Bericht</button>
         <button id="bierwart" class="people-button">Bierwart</button>
         <div class="account">
@@ -1632,6 +1656,7 @@
       // 20. Persönliche Berichte: immer nur Buchungen der ausgewählten Person.
       // Der Zeitraum umfasst alle gespeicherten Monate, auch nach einem Monatswechsel.
       let reportView = "overview";
+      let adminHistoryPersonId = null;
 
       function transactionsForPerson(personId) {
         return state.transactions
@@ -1831,10 +1856,11 @@
       }
 
       function renderReport() {
-        const transactions = transactionsForPerson(activePerson.id);
+        const person = people.find(({ id }) => id === adminHistoryPersonId) || activePerson;
+        const transactions = transactionsForPerson(person.id);
         const isOverview = reportView === "overview";
 
-        renderPersonName($("report-person"), activePerson);
+        renderPersonName($("report-person"), person);
         $("report-title").textContent = isOverview
           ? "Bericht"
           : reportView === "history"
@@ -1842,7 +1868,7 @@
             : "Statistik";
         $("report-options").hidden = !isOverview;
         $("report-content").hidden = isOverview;
-        $("report-back").hidden = isOverview;
+        $("report-back").hidden = isOverview || adminHistoryPersonId !== null;
         $("report-list").replaceChildren();
         const isStatistics = reportView === "statistics";
         $("statistics-content").hidden = !isStatistics;
@@ -1870,7 +1896,7 @@
           return;
         }
 
-        const balances = bookingBalances(activePerson.id);
+        const balances = bookingBalances(person.id);
         // Neueste Buchungen zuerst. Gespeicherte Preise bleiben auch bei Preisänderungen korrekt.
         for (const transaction of transactions) {
           const entry = document.createElement("li");
@@ -1916,6 +1942,10 @@
         reportView = "overview";
         renderReport();
         showDialog("report-dialog");
+      });
+
+      $("report-dialog").addEventListener("close", () => {
+        adminHistoryPersonId = null;
       });
 
       $("show-history").addEventListener("click", () => {
@@ -2020,13 +2050,23 @@
 
         for (const person of entries) {
           const row = document.createElement("li");
-          row.className = "statistic-entry";
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "statistic-entry";
+          button.setAttribute("aria-haspopup", "dialog");
           const name = document.createElement("span");
           renderPersonName(name, person);
           const debt = document.createElement("strong");
           debt.className = "balance";
           debt.textContent = euro(person.debt);
-          row.append(name, debt);
+          button.append(name, debt);
+          button.addEventListener("click", () => {
+            adminHistoryPersonId = person.id;
+            reportView = "history";
+            renderReport();
+            showDialog("report-dialog");
+          });
+          row.append(button);
           $("monthly-list").append(row);
         }
       }
