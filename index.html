@@ -648,6 +648,23 @@
         font-weight: 700;
       }
 
+      .password-control {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+      }
+
+      .password-toggle {
+        display: grid;
+        min-width: 48px;
+        place-items: center;
+      }
+
+      .password-toggle svg {
+        width: 22px;
+        height: 22px;
+      }
+
       select {
         font: inherit;
         color: var(--black);
@@ -1001,15 +1018,22 @@
           Zugriffsschutz.
         </p>
         <form id="bierwart-login-form" class="admin-form">
-          <label class="admin-field"
-            >Passwort
-            <input
-              id="bierwart-password"
-              type="password"
-              autocomplete="off"
-              required
-            />
-          </label>
+          <div class="admin-field">
+            <label for="bierwart-password">Passwort</label>
+            <div id="bierwart-password-control" class="password-control">
+              <input id="bierwart-password" type="password" autocomplete="off"
+                aria-describedby="bierwart-login-error" required />
+              <button type="button" id="bierwart-password-toggle" class="password-toggle"
+                aria-label="Passwort anzeigen" aria-controls="bierwart-password">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" />
+                  <circle cx="12" cy="12" r="2.5" />
+                  <path id="bierwart-eye-slash" d="M3 3l18 18" hidden />
+                </svg>
+              </button>
+            </div>
+          </div>
           <p id="bierwart-login-error" class="error" role="alert" hidden></p>
           <button type="submit" class="primary">Öffnen</button>
         </form>
@@ -2110,17 +2134,50 @@
         if ($("report-dialog").open) renderReport();
       }
 
+      const bierwartPassword = $("bierwart-password");
+      const passwordToggle = $("bierwart-password-toggle");
+      let passwordShake;
+
+      function showBierwartPassword(visible) {
+        bierwartPassword.type = visible ? "text" : "password";
+        const slash = $("bierwart-eye-slash");
+        slash.toggleAttribute("hidden", !visible);
+        passwordToggle.setAttribute("aria-label",
+          visible ? "Passwort ausblenden" : "Passwort anzeigen");
+      }
+
+      passwordToggle.addEventListener("click", () => {
+        showBierwartPassword(bierwartPassword.type === "password");
+      });
+
+      bierwartPassword.addEventListener("input", () => {
+        bierwartPassword.removeAttribute("aria-invalid");
+        $("bierwart-login-error").hidden = true;
+      });
+
       $("bierwart").addEventListener("click", async () => {
         await refreshState();
         if (!storageReady) return;
-        $("bierwart-password").value = "";
+        bierwartPassword.value = "";
+        bierwartPassword.removeAttribute("aria-invalid");
+        showBierwartPassword(false);
         $("bierwart-login-error").hidden = true;
         showDialog("bierwart-login");
       });
 
       $("bierwart-login-form").addEventListener("submit", (event) => {
         event.preventDefault();
-        if ($("bierwart-password").value !== "test") {
+        if (bierwartPassword.value !== "test") {
+          bierwartPassword.value = "";
+          bierwartPassword.setAttribute("aria-invalid", "true");
+          bierwartPassword.focus();
+          if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            passwordShake?.cancel();
+            passwordShake = $("bierwart-password-control").animate(
+              [0, -8, 7, -5, 3, 0].map((x) => ({ transform: `translateX(${x}px)` })),
+              { duration: 320, easing: "ease-out" },
+            );
+          }
           $("bierwart-login-error").textContent = "Falsches Passwort.";
           $("bierwart-login-error").hidden = false;
           return;
