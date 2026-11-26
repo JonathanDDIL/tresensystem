@@ -173,7 +173,7 @@
       .real-name {
         display: block;
         color: var(--name-muted);
-        font-size: 0.75rem;
+        font-size: 0.6875rem;
         font-weight: 400;
         line-height: 1.3;
         overflow-wrap: anywhere;
@@ -950,11 +950,12 @@
         </form>
 
         <form id="change-balance-form" class="admin-form" hidden>
-          <label class="admin-field"
-            >Person
-            <select id="balance-person" required></select>
-          </label>
-          <span id="balance-real-name" class="real-name"></span>
+          <div class="admin-field">
+            <span id="balance-person-label">Person auswählen</span>
+            <button type="button" id="balance-person"
+              aria-labelledby="balance-person-label balance-person"
+              aria-haspopup="dialog"></button>
+          </div>
           <p id="balance-current" class="report-caption"></p>
           <label class="admin-field"
             >Neues Guthaben in Euro
@@ -1244,7 +1245,11 @@
       });
 
       // 9. Personenwahl: Suchtext filtern, Guthaben anzeigen und Auswahl übernehmen.
+      let pickingBalancePerson = false;
+      let balancePersonId = null;
+
       function renderPeople() {
+        const selectedId = pickingBalancePerson ? balancePersonId : activePerson.id;
         const search = $("person-search").value.trim().toLocaleLowerCase("de");
         const matches = people.filter((p) =>
           [beerNameOf(p), p.name].some((name) => name.toLocaleLowerCase("de").includes(search)),
@@ -1255,7 +1260,7 @@
           button.className = "person";
           button.setAttribute(
             "aria-pressed",
-            String(person.id === activePerson.id),
+            String(person.id === selectedId),
           );
           const name = document.createElement("span");
           renderPersonName(name, person);
@@ -1264,8 +1269,13 @@
           balance.textContent = euro(balanceFor(person.id));
           button.append(name, balance);
           button.addEventListener("click", () => {
-            activePerson = person;
             $("people-dialog").close();
+            if (pickingBalancePerson) {
+              balancePersonId = person.id;
+              updateAdminBalance();
+              return;
+            }
+            activePerson = person;
             updateAccount();
             resetDisplay();
           });
@@ -1278,13 +1288,17 @@
           $("people-list").append(empty);
         }
       }
-      $("people").addEventListener("click", async () => {
+      async function openPersonSearch(forBalance) {
         await refreshState();
         if (!storageReady) return;
+        pickingBalancePerson = forBalance;
         $("person-search").value = "";
         renderPeople();
         showDialog("people-dialog");
-      });
+        $("person-search").focus();
+      }
+      $("people").addEventListener("click", () => openPersonSearch(false));
+      $("balance-person").addEventListener("click", () => openPersonSearch(true));
       $("person-search").addEventListener("input", renderPeople);
 
       // 10. Mengenauswahl: Anzeige aktualisieren und Grenzen von 0 bis 99 beachten.
@@ -1667,29 +1681,11 @@
         $("admin-message").hidden = false;
       }
 
-      function updateAdminPersonOptions() {
-        const selectedId = $("balance-person").value || activePerson.id;
-        $("balance-person").replaceChildren();
-
-        for (const person of people) {
-          const option = document.createElement("option");
-          option.value = person.id;
-          option.textContent = beerNameOf(person);
-          $("balance-person").append(option);
-        }
-
-        $("balance-person").value = people.some(
-          (person) => person.id === selectedId,
-        )
-          ? selectedId
-          : people[0].id;
-        updateAdminBalance();
-      }
-
       function updateAdminBalance() {
-        const person = people.find(({ id }) => id === $("balance-person").value);
-        $("balance-real-name").textContent = person?.beerName && person.beerName !== person.name ? person.name : "";
-        const value = balanceFor($("balance-person").value);
+        const person = people.find(({ id }) => id === balancePersonId) || activePerson;
+        balancePersonId = person.id;
+        renderPersonName($("balance-person"), person);
+        const value = balanceFor(balancePersonId);
         $("balance-current").textContent =
           `Aktuelles Guthaben (${monthKey()}): ${euro(value)}`;
         $("new-balance").value = "";
@@ -1776,7 +1772,7 @@
           $("new-person-name").value = "";
           $("new-person-nfc").value = "";
         }
-        if (view === "balance") updateAdminPersonOptions();
+        if (view === "balance") updateAdminBalance();
         if (view === "monthly") {
           $("admin-month").value = monthKey();
           renderMonthlyReport();
@@ -1828,7 +1824,6 @@
       $("admin-back").addEventListener("click", () =>
         showAdminView("overview"),
       );
-      $("balance-person").addEventListener("change", updateAdminBalance);
       $("new-balance").addEventListener("input", updateBalanceSaveButton);
       $("admin-month").addEventListener("input", renderMonthlyReport);
 
@@ -1861,7 +1856,7 @@
             throw Error(
               "Bitte einen gültigen Eurobetrag mit höchstens zwei Nachkommastellen eingeben.",
             );
-          const personId = $("balance-person").value;
+          const personId = balancePersonId;
           await saveAdminChange({ action: "set-balance", personId, targetCents });
           updateAdminBalance();
           adminMessage(`Guthaben gespeichert: ${euro(targetCents)}.`);
@@ -1891,7 +1886,7 @@
           if ($("bierwart-dialog").open && adminView === "monthly")
             renderMonthlyReport();
           if ($("bierwart-dialog").open && adminView === "balance")
-            updateAdminPersonOptions();
+            updateAdminBalance();
           if ($("product-dialog").open && !$("review-step").hidden) {
             review();
             showBookingError(
@@ -1912,7 +1907,7 @@
         if ($("people-dialog").open) renderPeople();
         if ($("report-dialog").open) renderReport();
         if ($("bierwart-dialog").open && adminView === "monthly") renderMonthlyReport();
-        if ($("bierwart-dialog").open && adminView === "balance") updateAdminPersonOptions();
+        if ($("bierwart-dialog").open && adminView === "balance") updateAdminBalance();
         if (!bookingPending && $("product-dialog").open && !$("review-step").hidden) review();
       });
     </script>
