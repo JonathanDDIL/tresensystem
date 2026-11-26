@@ -151,12 +151,17 @@
         grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
         gap: 18px;
       }
+      .screen.app {
+        padding-bottom: calc(clamp(24px, 4dvh, 40px) + env(safe-area-inset-bottom));
+      }
       .topbar {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 20px;
-        min-height: 64px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: stretch;
+        gap: 8px clamp(6px, 2vw, 20px);
+      }
+      #people {
+        justify-self: start;
       }
       .people-button {
         background: var(--black);
@@ -165,6 +170,8 @@
         padding: 12px 22px;
       }
       .account {
+        grid-column: 1 / -1;
+        overflow-wrap: anywhere;
         font-size: clamp(14px, 2.2vw, 19px);
         line-height: 1.5;
       }
@@ -451,7 +458,6 @@
       }
 
       .report-button {
-        margin-left: auto;
         padding: 12px 18px;
         font-weight: 700;
         flex-shrink: 0;
@@ -562,9 +568,6 @@
         .app {
           gap: 10px;
         }
-        .topbar {
-          min-height: 52px;
-        }
         .display {
           padding: 14px;
           gap: 10px;
@@ -617,9 +620,6 @@
         }
         .product-name {
           font-size: 12px;
-        }
-        .topbar {
-          gap: 12px;
         }
         .people-button,
         .report-button {
@@ -692,12 +692,12 @@
       <!-- Kopfzeile mit Personenwahl, aktivem Namen und Guthaben. -->
       <header class="topbar">
         <button id="people" class="people-button">Personen</button>
+        <button id="report" class="report-button">Bericht</button>
+        <button id="bierwart" class="people-button">Bierwart</button>
         <div class="account">
           <div>Angemeldet als: <strong id="person-name"></strong></div>
           <div id="account-balance" class="balance"></div>
         </div>
-        <button id="report" class="report-button">Bericht</button>
-        <button id="bierwart" class="people-button">Bierwart</button>
       </header>
       <!-- Anzeigefeld für die aktuelle Auswahl und die letzte erfolgreiche Buchung. -->
       <section class="display" aria-label="Aktuelle Buchung">
