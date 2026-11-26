@@ -319,7 +319,8 @@
         background: var(--overlay);
       }
       .modal-body {
-        padding: 24px;
+        --modal-padding: 24px;
+        padding: var(--modal-padding);
         display: flex;
         flex-direction: column;
         gap: 20px;
@@ -327,6 +328,15 @@
         overflow: auto;
       }
       .modal-head {
+        position: sticky;
+        inset-block-start: 0;
+        z-index: 1;
+        flex-shrink: 0;
+        margin-block-start: calc(-1 * var(--modal-padding));
+        margin-inline: calc(-1 * var(--modal-padding));
+        padding: var(--modal-padding) var(--modal-padding) 8px;
+        margin-block-end: -8px;
+        background: var(--white);
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -792,7 +802,7 @@
           max-height: 38px;
         }
         .modal-body {
-          padding: 16px;
+          --modal-padding: 16px;
           gap: 12px;
         }
         .large-image {
@@ -835,7 +845,7 @@
           font-size: 12px;
         }
         .modal-body {
-          padding: 18px;
+          --modal-padding: 18px;
         }
         .details {
           font-size: 17px;
