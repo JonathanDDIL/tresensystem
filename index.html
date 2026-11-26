@@ -1998,7 +1998,9 @@
         const totalDebt = entries.reduce((sum, person) => sum + person.debt, 0);
         $("monthly-month").textContent =
           monthLabelFormat.format(new Date(`${month}-01T00:00:00Z`));
-        $("monthly-total").textContent = `Schulden gesamt: ${euro(totalDebt)}`;
+        const amount = document.createElement("strong");
+        amount.textContent = euro(totalDebt);
+        $("monthly-total").replaceChildren("Schulden gesamt: ", amount);
 
         for (const person of entries) {
           const row = document.createElement("li");
