@@ -1007,7 +1007,7 @@
         </div>
         <div id="bierwart-options" class="report-options">
           <button id="admin-create" class="primary">Benutzer anlegen</button>
-          <button id="admin-balance" class="primary">Guthaben ändern</button>
+          <button id="admin-balance" class="primary">Benutzer bearbeiten</button>
           <button id="admin-monthly" class="primary">Monatsbericht</button>
         </div>
 
@@ -1049,7 +1049,11 @@
               aria-labelledby="balance-person-label balance-person"
               aria-haspopup="dialog"></button>
           </div>
-          <p id="balance-current" class="report-caption"></p>
+          <p id="balance-current" class="report-caption" hidden></p>
+          <label class="admin-field">
+            Biernamen ändern
+            <input id="edit-beer-name" type="text" maxlength="80" autocomplete="off" required disabled />
+          </label>
           <label class="admin-field"
             >Neues Guthaben in Euro
             <input
@@ -1058,7 +1062,7 @@
               inputmode="decimal"
               placeholder="z. B. -5,00"
               autocomplete="off"
-              required
+              disabled
             />
           </label>
           <p class="report-caption">
@@ -1072,7 +1076,7 @@
             class="primary positive"
             disabled
           >
-            Guthaben speichern
+            Speichern
           </button>
         </form>
 
@@ -1364,7 +1368,7 @@
             $("people-dialog").close();
             if (pickingBalancePerson) {
               balancePersonId = person.id;
-              updateAdminBalance();
+              updateAdminBalance(true);
               return;
             }
             activePerson = person;
@@ -1941,14 +1945,22 @@
         $("admin-message").hidden = false;
       }
 
-      function updateAdminBalance() {
-        const person = people.find(({ id }) => id === balancePersonId) || activePerson;
-        balancePersonId = person.id;
-        renderPersonName($("balance-person"), person);
-        const value = balanceFor(balancePersonId);
-        $("balance-current").textContent =
-          `Aktuelles Guthaben (${monthKey()}): ${euro(value)}`;
-        $("new-balance").value = "";
+      let savingUser = false;
+
+      function updateAdminBalance(resetFields = false) {
+        const person = people.find(({ id }) => id === balancePersonId);
+        const picker = $("balance-person");
+        if (person) renderPersonName(picker, person);
+        else picker.textContent = "Auswählen";
+        const current = $("balance-current");
+        current.hidden = !person;
+        current.textContent = person ? `Aktuelles Guthaben: ${euro(balanceFor(person.id))}` : "";
+        $("edit-beer-name").disabled = !person;
+        $("new-balance").disabled = !person;
+        if (resetFields) {
+          $("edit-beer-name").value = person ? beerNameOf(person) : "";
+          $("new-balance").value = "";
+        }
         updateBalanceSaveButton();
       }
 
@@ -1963,8 +1975,12 @@
       }
 
       function updateBalanceSaveButton() {
-        $("save-balance").disabled =
-          !storageReady || parseEuroInput($("new-balance").value) === null;
+        const person = people.find(({ id }) => id === balancePersonId);
+        const beerName = $("edit-beer-name").value.trim();
+        const balance = $("new-balance").value.trim();
+        $("save-balance").disabled = savingUser || !storageReady || !person ||
+          !beerName || (balance !== "" && parseEuroInput(balance) === null) ||
+          (balance === "" && beerName === beerNameOf(person));
       }
 
       // Für jeden Monat wird der gespeicherte Kontostand ausgewertet, nicht nur der laufende Monat.
@@ -2026,7 +2042,7 @@
         $("bierwart-title").textContent = {
           overview: "Bierwart",
           create: "Benutzer anlegen",
-          balance: "Guthaben ändern",
+          balance: "Benutzer bearbeiten",
           monthly: "Monatsbericht",
         }[view];
 
@@ -2035,7 +2051,10 @@
           $("new-person-name").value = "";
           $("new-person-nfc").value = "";
         }
-        if (view === "balance") updateAdminBalance();
+        if (view === "balance") {
+          balancePersonId = null;
+          updateAdminBalance(true);
+        }
         if (view === "monthly") {
           $("admin-month").value = monthKey();
           renderMonthlyReport();
@@ -2088,6 +2107,7 @@
         showAdminView("overview"),
       );
       $("new-balance").addEventListener("input", updateBalanceSaveButton);
+      $("edit-beer-name").addEventListener("input", updateBalanceSaveButton);
       $("admin-month").addEventListener("input", renderMonthlyReport);
       let invoiceDownloading = false;
       $("download-invoice").addEventListener("click", async () => {
@@ -2136,22 +2156,30 @@
         }
       });
 
-      // Zielguthaben als Differenz zum bisherigen Stand speichern; die Historie bleibt unverändert.
       $("change-balance-form").addEventListener("submit", async (event) => {
         event.preventDefault();
+        if ($("save-balance").disabled) return;
+        const personId = balancePersonId;
+        const person = people.find(({ id }) => id === personId);
+        const beerName = $("edit-beer-name").value.trim();
+        const balance = $("new-balance").value.trim();
+        const change = { action: "edit-person", personId };
+        if (beerName !== beerNameOf(person)) change.beerName = beerName;
+        if (balance !== "") change.targetCents = parseEuroInput(balance);
+
+        savingUser = true;
+        updateBalanceSaveButton();
         try {
-          const targetCents = parseEuroInput($("new-balance").value);
-          if (targetCents === null)
-            throw Error(
-              "Bitte einen gültigen Eurobetrag mit höchstens zwei Nachkommastellen eingeben.",
-            );
-          const personId = balancePersonId;
-          await saveAdminChange({ action: "set-balance", personId, targetCents });
-          updateAdminBalance();
-          adminMessage(`Guthaben gespeichert: ${euro(targetCents)}.`);
-          resetDisplay();
+          await saveAdminChange(change);
+          if (balancePersonId === personId) updateAdminBalance(true);
+          adminMessage("Änderungen gespeichert.");
+          if (activePerson.id === personId && change.beerName !== undefined &&
+              !$("display-title").closest(".display").classList.contains("has-booking")) resetDisplay();
         } catch (error) {
           adminMessage(error.message, true);
+        } finally {
+          savingUser = false;
+          updateBalanceSaveButton();
         }
       });
 

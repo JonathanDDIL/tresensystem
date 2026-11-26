@@ -37,15 +37,20 @@ function requireInput(valid, message) {
   if (!valid) throw new RequestError(message);
 }
 
+function requireUniqueBeerName(data, beerName, exceptId) {
+  requireInput(!data.people.some((person) =>
+    person.id !== exceptId &&
+    (person.beerName || person.name).toLocaleLowerCase("de") === beerName.toLocaleLowerCase("de")),
+    "Dieser Biername ist bereits vergeben.");
+}
+
 function createPerson(data, input) {
   const beerName = typeof input.beerName === "string" ? input.beerName.trim() : "";
   const name = typeof input.name === "string" ? input.name.trim() : "";
   const nfcId = typeof input.nfcId === "string" ? input.nfcId.trim() : "";
   requireInput(beerName && beerName.length <= 80 && name && name.length <= 80 && nfcId && nfcId.length <= 120,
     "Bitte gültigen Biernamen, Vor- und Nachnamen und NFC-Kennung eingeben.");
-  requireInput(!data.people.some((person) =>
-    (person.beerName || person.name).toLocaleLowerCase("de") === beerName.toLocaleLowerCase("de")),
-    "Dieser Biername ist bereits vergeben.");
+  requireUniqueBeerName(data, beerName);
   requireInput(!data.people.some((person) => person.nfcId === nfcId),
     "Diese NFC-Kennung ist bereits vergeben.");
   const number = Math.max(...data.people.map((person) =>
@@ -86,6 +91,19 @@ function applyChange(data, input) {
   const createdAt = now.toISOString();
   if (input.action === "set-balance") {
     setBalance(data, person, input, month, createdAt);
+    return {};
+  }
+
+  if (input.action === "edit-person") {
+    requireInput(input.beerName !== undefined || input.targetCents !== undefined,
+      "Keine Änderungen angegeben.");
+    if (input.beerName !== undefined) {
+      const beerName = typeof input.beerName === "string" ? input.beerName.trim() : "";
+      requireInput(beerName && beerName.length <= 80, "Bitte einen gültigen Biernamen eingeben.");
+      requireUniqueBeerName(data, beerName, person.id);
+      person.beerName = beerName;
+    }
+    if (input.targetCents !== undefined) setBalance(data, person, input, month, createdAt);
     return {};
   }
 
