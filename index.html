@@ -536,10 +536,10 @@
       }
 
       .history-entry time {
-        font-size: 14px;
+        font-size: 12px;
       }
 
-      .history-entry summary .balance {
+      .history-summary-price {
         margin-inline-start: auto;
         white-space: nowrap;
       }
@@ -1663,11 +1663,10 @@
 
             const details = document.createElement("details");
             const summary = document.createElement("summary");
-            const balance = document.createElement("strong");
-            balance.className = "balance";
-            balance.textContent = euro(balances.get(transaction.id));
-            balance.setAttribute("aria-label", `Guthaben nach der Buchung: ${balance.textContent}`);
-            summary.append(product, time, balance);
+            const summaryPrice = document.createElement("strong");
+            summaryPrice.className = "history-summary-price";
+            summaryPrice.textContent = euro(transaction.totalCents);
+            summary.append(product, time, summaryPrice);
 
             const prices = document.createElement("div");
             prices.className = "history-prices";
@@ -1677,7 +1676,12 @@
             const totalValue = document.createElement("strong");
             totalValue.textContent = euro(transaction.totalCents);
             total.append("Gesamtpreis: ", totalValue);
-            prices.append(unit, total);
+            const balanceLine = document.createElement("p");
+            const balance = document.createElement("strong");
+            balance.className = "balance";
+            balance.textContent = euro(balances.get(transaction.id));
+            balanceLine.append("Guthaben nach der Buchung: ", balance);
+            prices.append(unit, total, balanceLine);
             details.append(summary, prices);
             entry.append(details);
             $("report-list").append(entry);
