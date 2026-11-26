@@ -332,6 +332,19 @@
         justify-content: space-between;
         gap: 16px;
       }
+      .admin-heading {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      #admin-back {
+        flex: none;
+        width: 44px;
+        font-size: 22px;
+      }
+
       .modal-head h2 {
         font-size: 24px;
       }
@@ -1090,7 +1103,10 @@
     <dialog id="bierwart-dialog" class="modal" aria-labelledby="bierwart-title">
       <div class="modal-body">
         <div class="modal-head">
-          <h2 id="bierwart-title">Bierwart</h2>
+          <div class="admin-heading">
+            <button id="admin-back" type="button" aria-label="Zurück" hidden>←</button>
+            <h2 id="bierwart-title">Bierwart</h2>
+          </div>
           <button
             class="close"
             data-close="bierwart-dialog"
@@ -1231,9 +1247,6 @@
         </section>
 
         <p id="admin-message" class="admin-message" role="status" hidden></p>
-        <button id="admin-back" class="back" hidden>
-          Zurück zur Verwaltung
-        </button>
       </div>
     </dialog>
 
