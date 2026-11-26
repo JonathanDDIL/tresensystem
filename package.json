@@ -6,6 +6,7 @@
   "private": true,
   "dependencies": {
     "@netlify/database": "^2.0.4",
+    "pdfkit": "^0.21.0",
     "pg": "^8.23.1"
   }
 }

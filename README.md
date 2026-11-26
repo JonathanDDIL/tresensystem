@@ -20,3 +20,14 @@ sollten die Buchung und denselben Kontostand anzeigen.
 Die fiktiven Vor- und Nachnamen kombinieren je 50 häufige weibliche und männliche
 [Vornamen Erwachsener](https://www.beliebte-vornamen.de/49519-erwachsene.htm)
 mit den 100 häufigsten [Nachnamen bei Namenskarte](https://www.namenskarte.com/h%C3%A4ufigste-nachnamen-deutschland).
+
+## Monatsrechnungen
+
+Der Bierwart lädt die PDF für den ausgewählten Monat herunter. Berücksichtigt
+werden Getränkebuchungen vor der letzten Berliner Mitternacht, bei vergangenen
+Monaten bis zu ihrem Monatsende. Die PDF listet Personen mit Buchungen unter
+ihrem Vor- und Nachnamen und speichert den Stand serverseitig in PostgreSQL.
+
+Netlify führt die geplante Aktualisierung nur im veröffentlichten Deploy aus.
+In der Testvorschau erzeugt der erste Download die PDF für den aktuellen
+Stichtag, falls sie noch fehlt. Die Vorschau verwendet ausschließlich Testdaten.

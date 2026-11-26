@@ -19,7 +19,7 @@ function json(body, status = 200) {
   });
 }
 
-function getPool() {
+export function getPool() {
   if (!pool) {
     pool = new pg.Pool({
       connectionString: process.env.TRESEN_TEST_DATABASE_URL || getConnectionString(),
