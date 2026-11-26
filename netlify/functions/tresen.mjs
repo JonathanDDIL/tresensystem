@@ -77,8 +77,53 @@ function setBalance(data, person, input, month, createdAt) {
   }
 }
 
+const inventoryDrinks = [
+  "DFK", "Vita Zitrone", "Vita Cola", "Vita Pur", "Radler", "Jever Fun", "Erdinger alkoholfrei",
+];
+const inventoryDateFormat = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit",
+});
+const inventoryKey = (name) => name.toLocaleLowerCase("de");
+
+function ensureInventory(data) {
+  data.inventory ??= {
+    stock: inventoryDrinks.map((name) => ({ name, bottles: null })),
+    counts: [],
+  };
+  return data;
+}
+
+function recordInventory(data, input, now) {
+  const date = input.date;
+  const validDate = typeof date === "string" && /^[1-9][0-9]{3}-[0-9]{2}-[0-9]{2}$/.test(date)
+    ? new Date(date + "T00:00:00Z") : null;
+  requireInput(validDate && Number.isFinite(validDate.getTime()) &&
+    validDate.toISOString().slice(0, 10) === date && date <= inventoryDateFormat.format(now),
+    "Bitte ein gültiges Inventurdatum bis heute auswählen.");
+  requireInput(Array.isArray(input.items) && input.items.length <= 250,
+    "Ungültige Getränkeliste.");
+  const names = new Set();
+  const stock = input.items.map((entry) => {
+    const name = typeof entry?.name === "string" ? entry.name.trim() : "";
+    requireInput(name && name.length <= 80 && !names.has(inventoryKey(name)),
+      "Bitte eindeutige Getränkenamen eingeben.");
+    requireInput(Number.isSafeInteger(entry.bottles) && entry.bottles >= 0,
+      "Bitte für jedes Getränk eine ganze Flaschenzahl ab 0 eingeben.");
+    names.add(inventoryKey(name));
+    return { name, bottles: entry.bottles };
+  });
+  requireInput(data.inventory.stock.every(({ name }) => names.has(inventoryKey(name))),
+    "Die Getränkeliste wurde geändert. Bitte die Inventur erneut öffnen.");
+  data.inventory.stock = stock;
+  data.inventory.counts.push({ date, recordedAt: now.toISOString(), items: stock });
+}
+
 function applyChange(data, input) {
   requireInput(input && typeof input === "object", "Ungültige Anfrage.");
+  if (input.action === "record-inventory") {
+    recordInventory(ensureInventory(data), input, new Date());
+    return {};
+  }
   if (input.action === "create-person") {
     createPerson(data, input);
     return {};
@@ -146,7 +191,7 @@ async function write(input) {
       await client.query("UPDATE tresen_test_journal SET data = $1 WHERE id = 1", [data]);
     }
     await client.query("COMMIT");
-    return json({ state: data, transaction });
+    return json({ state: ensureInventory(data), transaction });
   } catch (error) {
     await client.query("ROLLBACK").catch(() => {});
     throw error;
@@ -159,7 +204,7 @@ export default async function handler(request) {
   try {
     if (request.method === "GET") {
       const { rows: [{ data }] } = await getPool().query(journal);
-      return json({ state: data });
+      return json({ state: ensureInventory(data) });
     }
     if (request.method !== "POST") return json({ error: "Methode nicht erlaubt." }, 405);
     const input = await request.json().catch(() => null);

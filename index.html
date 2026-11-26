@@ -696,6 +696,26 @@
         text-align: start;
       }
 
+      .inventory-fields {
+        display: grid;
+        gap: 12px;
+        min-inline-size: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+
+      .inventory-fields legend {
+        margin-bottom: 8px;
+      }
+
+      .inventory-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 6rem;
+        align-items: center;
+        gap: 8px;
+      }
+
       .range-days {
         display: grid;
         grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -1169,6 +1189,35 @@
             placeholder="Person suchen" autocomplete="off" />
           <ul id="monthly-list" class="monthly-list"></ul>
         </section>
+
+        <div id="admin-report-options" class="admin-form" hidden>
+          <button id="admin-stock" class="primary">Virtueller Bestand</button>
+          <button id="admin-inventory" class="primary">Inventur</button>
+          <button id="admin-delivery" class="primary" disabled>Lieferung</button>
+          <button id="admin-convent" class="primary">Conventsbericht</button>
+        </div>
+
+        <section id="admin-stock-view" class="admin-form" hidden>
+          <p id="stock-date" class="report-caption" hidden></p>
+          <ul id="stock-items" class="monthly-list"></ul>
+        </section>
+
+        <form id="admin-inventory-form" class="admin-form" hidden>
+          <label class="admin-field">
+            Inventurdatum
+            <input id="inventory-date" type="date" required />
+          </label>
+          <fieldset id="inventory-fields" class="inventory-fields" hidden>
+            <legend>Gezählter Bestand in Flaschen</legend>
+            <div id="inventory-items" class="admin-form"></div>
+            <label class="admin-field">
+              Neues Getränk
+              <input id="inventory-new-drink" type="text" maxlength="80" />
+            </label>
+            <button id="inventory-add" type="button">Getränk hinzufügen</button>
+            <button id="inventory-save" type="submit" class="primary positive">Inventur eintragen</button>
+          </fieldset>
+        </form>
 
         <section id="admin-report-calendar" aria-label="Zeitraum auswählen" hidden>
           <div class="statistics-month-nav">
@@ -2204,13 +2253,96 @@
       $("range-previous").addEventListener("click", () => moveRangeMonth(-1));
       $("range-next").addEventListener("click", () => moveRangeMonth(1));
 
+      const inventoryDayFormat = new Intl.DateTimeFormat("sv-SE", {
+        timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit",
+      });
+
+      function renderStock() {
+        const list = $("stock-items");
+        const latest = state.inventory?.counts.at(-1);
+        $("stock-date").hidden = !latest;
+        $("stock-date").textContent = latest
+          ? `Letzte eingetragene Inventur: ${rangeDateFormat.format(rangeDate(latest.date))}` : "";
+        list.replaceChildren();
+        for (const { name, bottles } of state.inventory?.stock || []) {
+          const row = document.createElement("li");
+          row.className = "statistic-entry";
+          const label = document.createElement("span");
+          label.textContent = name;
+          const quantity = document.createElement("strong");
+          quantity.textContent = bottles === null ? "Noch nicht gezählt" : `${bottles} Flaschen`;
+          row.append(label, quantity);
+          list.append(row);
+        }
+      }
+
+      function addInventoryItem(name) {
+        const label = document.createElement("label");
+        label.className = "inventory-item";
+        const count = document.createElement("input");
+        count.type = "number";
+        count.min = "0";
+        count.step = "1";
+        count.inputMode = "numeric";
+        count.required = true;
+        count.dataset.drink = name;
+        label.append(name, count);
+        $("inventory-items").append(label);
+      }
+
+      $("inventory-date").addEventListener("input", () => {
+        $("inventory-fields").hidden = !$("inventory-date").value || !$("inventory-date").validity.valid;
+      });
+
+      $("inventory-add").addEventListener("click", () => {
+        const input = $("inventory-new-drink");
+        const name = input.value.trim();
+        const exists = [...$("inventory-items").querySelectorAll("input")].some(
+          ({ dataset }) => dataset.drink.toLocaleLowerCase("de") === name.toLocaleLowerCase("de"),
+        );
+        if (!name || exists) {
+          adminMessage(exists ? "Dieses Getränk gibt es bereits." : "Bitte einen Getränkenamen eingeben.", true);
+          input.focus();
+          return;
+        }
+        addInventoryItem(name);
+        input.value = "";
+        $("admin-message").hidden = true;
+        $("inventory-items").lastElementChild.querySelector("input").focus();
+      });
+
+      $("admin-inventory-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const save = $("inventory-save");
+        if (save.disabled || $("inventory-fields").hidden) return;
+        const date = $("inventory-date").value;
+        const items = [...$("inventory-items").querySelectorAll("input")].map((input) => ({
+          name: input.dataset.drink, bottles: input.valueAsNumber,
+        }));
+        save.disabled = true;
+        try {
+          await saveAdminChange({ action: "record-inventory", date, items });
+          if (adminView === "inventory") {
+            showAdminView("stock");
+            adminMessage("Inventur eingetragen.");
+          }
+        } catch (error) {
+          if (adminView === "inventory") adminMessage(error.message, true);
+        } finally {
+          save.disabled = false;
+        }
+      });
+
       function showAdminView(view) {
         adminView = view;
         $("bierwart-options").hidden = view !== "overview";
         $("create-person-form").hidden = view !== "create";
         $("change-balance-form").hidden = view !== "balance";
         $("monthly-report").hidden = view !== "monthly";
-        $("admin-report-calendar").hidden = view !== "report";
+        $("admin-report-options").hidden = view !== "report";
+        $("admin-stock-view").hidden = view !== "stock";
+        $("admin-inventory-form").hidden = view !== "inventory";
+        $("admin-report-calendar").hidden = view !== "convent";
         $("admin-back").hidden = view === "overview";
         $("admin-message").hidden = true;
         $("bierwart-title").textContent = {
@@ -2219,6 +2351,9 @@
           balance: "Benutzer bearbeiten",
           monthly: "Monatsabrechnung",
           report: "Bericht",
+          stock: "Virtueller Bestand",
+          inventory: "Inventur",
+          convent: "Conventsbericht",
         }[view];
 
         if (view === "create") {
@@ -2230,7 +2365,15 @@
           balancePersonId = null;
           updateAdminBalance(true);
         }
-        if (view === "report") {
+        if (view === "stock") renderStock();
+        if (view === "inventory") {
+          $("admin-inventory-form").reset();
+          $("inventory-date").max = inventoryDayFormat.format(new Date());
+          $("inventory-fields").hidden = true;
+          $("inventory-items").replaceChildren();
+          for (const { name } of state.inventory?.stock || []) addInventoryItem(name);
+        }
+        if (view === "convent") {
           rangeMonth = monthKey();
           rangeStart = "";
           rangeEnd = "";
@@ -2319,8 +2462,11 @@
         showAdminView("monthly"),
       );
       $("admin-report").addEventListener("click", () => showAdminView("report"));
+      $("admin-stock").addEventListener("click", () => showAdminView("stock"));
+      $("admin-inventory").addEventListener("click", () => showAdminView("inventory"));
+      $("admin-convent").addEventListener("click", () => showAdminView("convent"));
       $("admin-back").addEventListener("click", () =>
-        showAdminView("overview"),
+        showAdminView(["stock", "inventory", "convent"].includes(adminView) ? "report" : "overview"),
       );
       $("new-balance").addEventListener("input", updateBalanceSaveButton);
       $("edit-beer-name").addEventListener("input", updateBalanceSaveButton);
@@ -2442,6 +2588,7 @@
         if ($("report-dialog").open) renderReport();
         if ($("bierwart-dialog").open && adminView === "monthly") renderMonthlyReport();
         if ($("bierwart-dialog").open && adminView === "balance") updateAdminBalance();
+        if ($("bierwart-dialog").open && adminView === "stock") renderStock();
         if (!bookingPending && $("product-dialog").open && !$("review-step").hidden) review();
       });
     </script>
