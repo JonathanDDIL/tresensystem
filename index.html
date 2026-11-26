@@ -341,8 +341,16 @@
 
       #admin-back {
         flex: none;
-        width: 44px;
-        font-size: 22px;
+        display: grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        padding: 0;
+      }
+
+      #admin-back svg {
+        width: 42px;
+        height: 42px;
       }
 
       .modal-head h2 {
@@ -1114,7 +1122,13 @@
       <div class="modal-body">
         <div class="modal-head">
           <div class="admin-heading">
-            <button id="admin-back" type="button" aria-label="Zurück" hidden>←</button>
+            <button id="admin-back" type="button" aria-label="Zurück" hidden>
+              <svg viewBox="0 0 44 44" aria-hidden="true" focusable="false">
+                <circle cx="22" cy="22" r="22" fill="var(--black)" />
+                <path d="M27 9.5 14.5 22 27 34.5" fill="none" stroke="var(--white)"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
             <h2 id="bierwart-title">Bierwart</h2>
           </div>
           <button
