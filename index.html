@@ -157,12 +157,12 @@
       }
       .topbar {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-columns: auto auto minmax(0, 1fr);
         align-items: stretch;
         gap: 8px clamp(6px, 2vw, 20px);
       }
-      #people {
-        justify-self: start;
+      #bierwart {
+        justify-self: end;
       }
       .people-button {
         background: var(--black);
@@ -580,6 +580,10 @@
         touch-action: pan-y pinch-zoom;
       }
 
+      .statistics-viewport {
+        overflow: hidden;
+      }
+
       .statistics-chart {
         --statistics-value-space: 5ch;
         display: grid;
@@ -941,8 +945,10 @@
               <strong id="statistics-month" aria-live="polite"></strong>
               <button type="button" id="statistics-next" aria-label="Nächster Monat">›</button>
             </div>
-            <div id="statistics-chart" class="statistics-chart" role="group"
-              aria-label="Gebuchte Getränke nach Anzahl"></div>
+            <div class="statistics-viewport">
+              <div id="statistics-chart" class="statistics-chart" role="group"
+                aria-label="Gebuchte Getränke nach Anzahl"></div>
+            </div>
           </div>
           <ul
             id="report-list"
@@ -1702,33 +1708,100 @@
         chart.append(axis);
       }
 
-      function moveStatisticsMonth(offset) {
+      const reducedStatisticsMotion = matchMedia("(prefers-reduced-motion: reduce)");
+      let statisticsAnimating = false;
+      const slidePosition = (x) => `translateX(${x}px)`;
+
+      async function moveStatisticsMonth(offset, drag = 0) {
+        if (statisticsAnimating) return;
         const date = new Date(`${statisticsMonth}-01T00:00:00Z`);
         date.setUTCMonth(date.getUTCMonth() + offset);
         const next = date.toISOString().slice(0, 7);
-        if (next < "0001-01" || next > monthKey()) return;
-        statisticsMonth = next;
-        renderStatistics();
+        const canMove = offset !== 0 && next >= "0001-01" && next <= monthKey();
+        const chart = $("statistics-chart");
+
+        if (reducedStatisticsMotion.matches) {
+          chart.style.transform = "";
+          if (canMove) {
+            statisticsMonth = next;
+            renderStatistics();
+          }
+          return;
+        }
+
+        statisticsAnimating = true;
+        const width = chart.clientWidth;
+        const previousMonth = statisticsMonth;
+        const destination = canMove ? -offset * width : 0;
+        try {
+          chart.style.transform = slidePosition(destination);
+          await chart.animate([
+            { transform: slidePosition(drag) },
+            { transform: slidePosition(destination) },
+          ], { duration: 160, easing: "ease-out" }).finished;
+          if (!canMove || reportView !== "statistics" ||
+              !$("report-dialog").open || statisticsMonth !== previousMonth) return;
+
+          statisticsMonth = next;
+          renderStatistics();
+          chart.style.transform = "";
+          await chart.animate([
+            { transform: slidePosition(offset * width) },
+            { transform: slidePosition(0) },
+          ], { duration: 200, easing: "ease-out" }).finished;
+        } finally {
+          chart.style.transform = "";
+          statisticsAnimating = false;
+        }
       }
 
       $("statistics-previous").addEventListener("click", () => moveStatisticsMonth(-1));
       $("statistics-next").addEventListener("click", () => moveStatisticsMonth(1));
-      $("statistics-content").addEventListener("touchstart", (event) => {
-        statisticsTouch = event.touches.length === 1 ? event.touches[0] : null;
+      const statisticsContent = $("statistics-content");
+      statisticsContent.addEventListener("touchstart", (event) => {
+        if (statisticsTouch) {
+          const { drag } = statisticsTouch;
+          statisticsTouch = null;
+          if (drag) moveStatisticsMonth(0, drag);
+          return;
+        }
+        if (statisticsAnimating || event.touches.length !== 1) return;
+        const { identifier, clientX, clientY } = event.touches[0];
+        statisticsTouch = { identifier, clientX, clientY, drag: 0, horizontal: null };
       }, { passive: true });
-      $("statistics-content").addEventListener("touchcancel", () => {
-        statisticsTouch = null;
-      });
-      $("statistics-content").addEventListener("touchend", (event) => {
+      statisticsContent.addEventListener("touchmove", (event) => {
+        const start = statisticsTouch;
+        if (!start || event.touches.length !== 1) return;
+        const touch = Array.from(event.touches).find(({ identifier }) => identifier === start.identifier);
+        if (!touch) return;
+        const dx = touch.clientX - start.clientX;
+        const dy = touch.clientY - start.clientY;
+        if (start.horizontal === null && Math.max(Math.abs(dx), Math.abs(dy)) >= 8)
+          start.horizontal = Math.abs(dx) > Math.abs(dy) * 1.5;
+        if (!start.horizontal || reducedStatisticsMotion.matches) return;
+
+        const chart = $("statistics-chart");
+        const atEdge = dx < 0 && statisticsMonth === monthKey();
+        start.drag = atEdge
+          ? dx / (3 + Math.abs(dx) / 55)
+          : Math.sign(dx) * Math.min(Math.abs(dx), chart.clientWidth);
+        chart.style.transform = slidePosition(start.drag);
+      }, { passive: true });
+      statisticsContent.addEventListener("touchcancel", () => {
         const start = statisticsTouch;
         statisticsTouch = null;
+        if (start?.drag) moveStatisticsMonth(0, start.drag);
+      });
+      statisticsContent.addEventListener("touchend", (event) => {
+        const start = statisticsTouch;
         if (!start) return;
         const end = Array.from(event.changedTouches).find(({ identifier }) => identifier === start.identifier);
         if (!end) return;
+        statisticsTouch = null;
         const dx = end.clientX - start.clientX;
         const dy = end.clientY - start.clientY;
-        if (Math.abs(dx) >= 45 && Math.abs(dx) > Math.abs(dy) * 1.5)
-          moveStatisticsMonth(dx > 0 ? -1 : 1);
+        const swipe = start.horizontal !== false && Math.abs(dx) >= 45 && Math.abs(dx) > Math.abs(dy) * 1.5;
+        if (swipe || start.drag) moveStatisticsMonth(swipe ? (dx > 0 ? -1 : 1) : 0, start.drag);
       }, { passive: true });
 
       function bookingBalances(personId) {
