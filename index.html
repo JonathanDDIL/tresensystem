@@ -6,19 +6,18 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#FFFFFF" />
     <title>Tresensystem Dresden</title>
     <!-- CSS: Gestaltung und Tablet-Layout. Die Farbwerte stehen zentral in :root. -->
     <style>
       /* 1. Zentrale Farbpalette und grundlegende Schrift */
       :root {
         --white: #ffffff;
-        --black: #111111;
+        --black: #000000;
         --gray: #eeeeee;
-        --line: #d5d5d5;
-        --red: #c62828;
-        --green: #238636;
-        --overlay: rgba(17, 17, 17, 0.35);
+        --red: #ff0000;
+        --line: color-mix(in srgb, var(--gray) 90%, var(--black));
+        --red-text: color-mix(in srgb, var(--red) 72%, var(--black));
+        --overlay: color-mix(in srgb, var(--black) 35%, transparent);
         --radius: 18px;
         --button-pressed-scale: 0.94;
         --button-pressed-brightness: 0.86;
@@ -131,6 +130,7 @@
         width: min(76vw, 540px);
         height: min(38dvh, 350px);
         border-radius: 24px;
+        border-bottom: 6px solid var(--red);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -140,6 +140,7 @@
         font-weight: 700;
       }
       .scan svg {
+        color: var(--red);
         width: 72px;
         height: 72px;
       }
@@ -158,6 +159,8 @@
         min-height: 64px;
       }
       .people-button {
+        background: var(--black);
+        color: var(--white);
         font-weight: 700;
         padding: 12px 22px;
       }
@@ -166,7 +169,7 @@
         line-height: 1.5;
       }
       .balance {
-        color: var(--red);
+        color: var(--red-text);
         font-weight: 700;
         font-variant-numeric: tabular-nums;
       }
@@ -174,6 +177,7 @@
       /* 6. Oberes Anzeigefeld und Buchungsbestätigung */
       .display {
         border: 1px solid var(--line);
+        border-top: 4px solid var(--red);
         border-radius: var(--radius);
         padding: clamp(16px, 3vw, 28px);
         display: flex;
@@ -332,10 +336,10 @@
       }
       .negative {
         background: var(--red);
-        color: var(--white);
+        color: var(--black);
       }
       .positive {
-        background: var(--green);
+        background: var(--black);
         color: var(--white);
       }
       .primary {
@@ -420,7 +424,7 @@
         font-size: 26px;
       }
       .error {
-        color: var(--red);
+        color: var(--red-text);
         font-weight: 700;
       }
       .back {
@@ -539,7 +543,7 @@
       }
 
       .admin-message[data-error="true"] {
-        color: var(--red);
+        color: var(--red-text);
       }
 
       .monthly-list {
