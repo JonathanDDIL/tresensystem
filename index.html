@@ -625,13 +625,6 @@
         font-variant-numeric: tabular-nums;
       }
 
-      .report-total {
-        font-weight: 700;
-        padding: 16px;
-        border-radius: 12px;
-        background: var(--gray);
-      }
-
       /* Bierwart: Formulare und Monatsabrechnung verwenden dieselbe Farbpalette. */
       .admin-form {
         display: grid;
@@ -1088,12 +1081,10 @@
             >Abrechnungsmonat
             <input id="admin-month" type="month" required />
           </label>
-          <p class="report-caption">
-            Schulden je Person für den gewählten Monat, einschließlich
-            Guthabenkorrekturen. Positive Guthaben werden nicht als Schulden
-            gezählt.
-          </p>
-          <p id="monthly-total" class="report-total"></p>
+          <div>
+            <p id="monthly-month"></p>
+            <p id="monthly-total"></p>
+          </div>
           <ul id="monthly-list" class="monthly-list"></ul>
         </section>
 
@@ -1645,7 +1636,7 @@
 
       let statisticsMonth = monthKey();
       let statisticsTouch = null;
-      const statisticsMonthFormat = new Intl.DateTimeFormat("de-DE", {
+      const monthLabelFormat = new Intl.DateTimeFormat("de-DE", {
         month: "long", year: "numeric", timeZone: "UTC",
       });
 
@@ -1673,7 +1664,7 @@
         const total = quantities.reduce((sum, quantity) => sum + quantity, 0);
         $("report-total").textContent = `${total} Getränke insgesamt · ${bookingCount} Buchungen`;
         $("statistics-month").textContent =
-          statisticsMonthFormat.format(new Date(`${statisticsMonth}-01T00:00:00Z`));
+          monthLabelFormat.format(new Date(`${statisticsMonth}-01T00:00:00Z`));
         $("statistics-next").disabled = statisticsMonth === current;
         const chart = $("statistics-chart");
         chart.replaceChildren();
@@ -1998,14 +1989,16 @@
         const month = $("admin-month").value;
         $("monthly-list").replaceChildren();
         if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+          $("monthly-month").textContent = "";
           $("monthly-total").textContent = "Bitte einen gültigen Monat wählen.";
           return;
         }
 
         const entries = monthlyDebts(month);
         const totalDebt = entries.reduce((sum, person) => sum + person.debt, 0);
-        $("monthly-total").textContent =
-          `${month} · Schulden gesamt: ${euro(totalDebt)}`;
+        $("monthly-month").textContent =
+          monthLabelFormat.format(new Date(`${month}-01T00:00:00Z`));
+        $("monthly-total").textContent = `Schulden gesamt: ${euro(totalDebt)}`;
 
         for (const person of entries) {
           const row = document.createElement("li");
