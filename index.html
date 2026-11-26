@@ -554,6 +554,69 @@
         gap: 16px;
       }
 
+      .statistics-month-nav {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 8px;
+        margin: 12px 0;
+        text-align: center;
+      }
+
+      .statistics-month-nav button {
+        min-width: 44px;
+        font-size: 1.25rem;
+      }
+
+      .statistics-month-nav button:disabled {
+        opacity: 0.4;
+      }
+
+      #statistics-content {
+        touch-action: pan-y pinch-zoom;
+      }
+
+      .statistics-chart {
+        --statistics-value-space: 5ch;
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        column-gap: 8px;
+        padding-inline-end: var(--statistics-value-space);
+        font-size: 0.875rem;
+      }
+
+      .statistics-label {
+        align-self: center;
+      }
+
+      .statistics-track {
+        min-width: 0;
+        min-height: 26px;
+        border-inline-start: 1px solid var(--black);
+        display: flex;
+        align-items: center;
+      }
+
+      .statistics-bar {
+        flex: none;
+        height: 12px;
+        background: var(--red);
+      }
+
+      .statistics-value {
+        margin-inline-start: 5px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .statistics-axis {
+        grid-column: 2;
+        display: flex;
+        justify-content: space-between;
+        border-top: 1px solid var(--black);
+        padding-top: 4px;
+        font-variant-numeric: tabular-nums;
+      }
+
       .report-total {
         font-weight: 700;
         padding: 16px;
@@ -867,7 +930,16 @@
           <button id="show-statistics" class="primary">Statistik</button>
         </div>
         <section id="report-content" aria-label="Berichtsinhalt" hidden>
-          <p id="report-total" class="report-total"></p>
+          <p id="report-total" class="report-caption"></p>
+          <div id="statistics-content" hidden>
+            <div class="statistics-month-nav">
+              <button type="button" id="statistics-previous" aria-label="Vorheriger Monat">‹</button>
+              <strong id="statistics-month" aria-live="polite"></strong>
+              <button type="button" id="statistics-next" aria-label="Nächster Monat">›</button>
+            </div>
+            <div id="statistics-chart" class="statistics-chart" role="group"
+              aria-label="Gebuchte Getränke nach Anzahl"></div>
+          </div>
           <ul
             id="report-list"
             class="report-list"
@@ -1561,27 +1633,99 @@
           .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
       }
 
-      // Mengen je Produkt zusammenfassen; die Anzahl zählt Getränke, nicht Buchungsvorgänge.
-      function statisticsFor(transactions) {
-        const totals = new Map();
+      let statisticsMonth = monthKey();
+      let statisticsTouch = null;
+      const statisticsMonthFormat = new Intl.DateTimeFormat("de-DE", {
+        month: "long", year: "numeric", timeZone: "UTC",
+      });
 
-        for (const transaction of transactions) {
-          const existing = totals.get(transaction.productId) || {
-            productId: transaction.productId,
-            productName: transaction.productName,
-            quantity: 0,
-          };
-
-          existing.quantity += transaction.quantity;
-          totals.set(transaction.productId, existing);
+      function statisticsFor(month, personId) {
+        const countsByPerson = new Map();
+        let maximum = 0;
+        let bookingCount = 0;
+        for (const entry of state.transactions) {
+          if (entry.month !== month) continue;
+          if (!countsByPerson.has(entry.personId)) countsByPerson.set(entry.personId, new Map());
+          const counts = countsByPerson.get(entry.personId);
+          const quantity = (counts.get(entry.productId) || 0) + entry.quantity;
+          counts.set(entry.productId, quantity);
+          maximum = Math.max(maximum, quantity);
+          if (entry.personId === personId) bookingCount++;
         }
-
-        return [...totals.values()].sort(
-          (a, b) =>
-            b.quantity - a.quantity ||
-            a.productName.localeCompare(b.productName, "de", { numeric: true }),
-        );
+        const quantities = drinks.map(({ id }) => countsByPerson.get(personId)?.get(id) || 0);
+        return { maximum, quantities, bookingCount };
       }
+
+      function renderStatistics() {
+        const current = monthKey();
+        if (statisticsMonth > current) statisticsMonth = current;
+        const { maximum, quantities, bookingCount } = statisticsFor(statisticsMonth, activePerson.id);
+        const total = quantities.reduce((sum, quantity) => sum + quantity, 0);
+        $("report-total").textContent = `${total} Getränke insgesamt · ${bookingCount} Buchungen`;
+        $("statistics-month").textContent =
+          statisticsMonthFormat.format(new Date(`${statisticsMonth}-01T00:00:00Z`));
+        $("statistics-next").disabled = statisticsMonth === current;
+        const chart = $("statistics-chart");
+        chart.replaceChildren();
+        chart.style.setProperty("--statistics-value-space", `${String(maximum).length + 2}ch`);
+        drinks.forEach((drink, index) => {
+          const quantity = quantities[index];
+          const label = document.createElement("span");
+          label.className = "statistics-label";
+          label.textContent = drink.name;
+          const track = document.createElement("span");
+          track.className = "statistics-track";
+          const bar = document.createElement("span");
+          bar.className = "statistics-bar";
+          bar.style.width = `${maximum ? quantity / maximum * 100 : 0}%`;
+          const value = document.createElement("strong");
+          value.className = "statistics-value";
+          value.textContent = quantity;
+          track.append(bar, value);
+          chart.append(label, track);
+        });
+
+        const axis = document.createElement("div");
+        axis.className = "statistics-axis";
+        const zero = document.createElement("span");
+        zero.textContent = "0";
+        axis.append(zero);
+        if (maximum > 0) {
+          const end = document.createElement("span");
+          end.textContent = maximum;
+          axis.append(end);
+        }
+        chart.append(axis);
+      }
+
+      function moveStatisticsMonth(offset) {
+        const date = new Date(`${statisticsMonth}-01T00:00:00Z`);
+        date.setUTCMonth(date.getUTCMonth() + offset);
+        const next = date.toISOString().slice(0, 7);
+        if (next < "0001-01" || next > monthKey()) return;
+        statisticsMonth = next;
+        renderStatistics();
+      }
+
+      $("statistics-previous").addEventListener("click", () => moveStatisticsMonth(-1));
+      $("statistics-next").addEventListener("click", () => moveStatisticsMonth(1));
+      $("statistics-content").addEventListener("touchstart", (event) => {
+        statisticsTouch = event.touches.length === 1 ? event.touches[0] : null;
+      }, { passive: true });
+      $("statistics-content").addEventListener("touchcancel", () => {
+        statisticsTouch = null;
+      });
+      $("statistics-content").addEventListener("touchend", (event) => {
+        const start = statisticsTouch;
+        statisticsTouch = null;
+        if (!start) return;
+        const end = Array.from(event.changedTouches).find(({ identifier }) => identifier === start.identifier);
+        if (!end) return;
+        const dx = end.clientX - start.clientX;
+        const dy = end.clientY - start.clientY;
+        if (Math.abs(dx) >= 45 && Math.abs(dx) > Math.abs(dy) * 1.5)
+          moveStatisticsMonth(dx > 0 ? -1 : 1);
+      }, { passive: true });
 
       function bookingBalances(personId) {
         const events = [
@@ -1627,14 +1771,20 @@
         $("report-content").hidden = isOverview;
         $("report-back").hidden = isOverview;
         $("report-list").replaceChildren();
+        const isStatistics = reportView === "statistics";
+        $("statistics-content").hidden = !isStatistics;
+        $("report-list").hidden = isStatistics;
 
         if (isOverview) return;
+        if (isStatistics) {
+          renderStatistics();
+          return;
+        }
 
         const totalQuantity = transactions.reduce(
           (sum, transaction) => sum + transaction.quantity,
           0,
         );
-        $("report-total").className = reportView === "history" ? "report-caption" : "report-total";
         $("report-total").textContent =
           `${totalQuantity} Getränke insgesamt · ${transactions.length} Buchungen`;
 
@@ -1647,60 +1797,43 @@
           return;
         }
 
-        if (reportView === "history") {
-          const balances = bookingBalances(activePerson.id);
-          // Neueste Buchungen zuerst. Gespeicherte Preise bleiben auch bei Preisänderungen korrekt.
-          for (const transaction of transactions) {
-            const entry = document.createElement("li");
-            entry.className = "history-entry";
+        const balances = bookingBalances(activePerson.id);
+        // Neueste Buchungen zuerst. Gespeicherte Preise bleiben auch bei Preisänderungen korrekt.
+        for (const transaction of transactions) {
+          const entry = document.createElement("li");
+          entry.className = "history-entry";
 
-            const product = document.createElement("strong");
-            product.textContent = `${transaction.quantity} × ${transaction.productName}`;
+          const product = document.createElement("strong");
+          product.textContent = `${transaction.quantity} × ${transaction.productName}`;
 
-            const time = document.createElement("time");
-            time.dateTime = transaction.createdAt;
-            time.textContent = bookingTime(transaction.createdAt);
+          const time = document.createElement("time");
+          time.dateTime = transaction.createdAt;
+          time.textContent = bookingTime(transaction.createdAt);
 
-            const details = document.createElement("details");
-            const summary = document.createElement("summary");
-            const summaryPrice = document.createElement("strong");
-            summaryPrice.className = "history-summary-price";
-            summaryPrice.textContent = euro(transaction.totalCents);
-            summary.append(product, time, summaryPrice);
+          const details = document.createElement("details");
+          const summary = document.createElement("summary");
+          const summaryPrice = document.createElement("strong");
+          summaryPrice.className = "history-summary-price";
+          summaryPrice.textContent = euro(transaction.totalCents);
+          summary.append(product, time, summaryPrice);
 
-            const prices = document.createElement("div");
-            prices.className = "history-prices";
-            const unit = document.createElement("p");
-            unit.textContent = `Einzelpreis: ${euro(transaction.unitPriceCents)}`;
-            const total = document.createElement("p");
-            const totalValue = document.createElement("strong");
-            totalValue.textContent = euro(transaction.totalCents);
-            total.append("Gesamtpreis: ", totalValue);
-            const balanceLine = document.createElement("p");
-            const balance = document.createElement("strong");
-            balance.className = "balance";
-            balance.textContent = euro(balances.get(transaction.id));
-            balanceLine.append("Guthaben nach der Buchung: ", balance);
-            prices.append(unit, total, balanceLine);
-            details.append(summary, prices);
-            entry.append(details);
-            $("report-list").append(entry);
-          }
-        } else {
-          // Die meistgebuchten Getränke stehen oben; Produkte ohne Buchung entfallen.
-          for (const statistic of statisticsFor(transactions)) {
-            const entry = document.createElement("li");
-            entry.className = "statistic-entry";
-
-            const product = document.createElement("span");
-            product.textContent = statistic.productName;
-
-            const count = document.createElement("strong");
-            count.textContent = `${statistic.quantity} mal`;
-
-            entry.append(product, count);
-            $("report-list").append(entry);
-          }
+          const prices = document.createElement("div");
+          prices.className = "history-prices";
+          const unit = document.createElement("p");
+          unit.textContent = `Einzelpreis: ${euro(transaction.unitPriceCents)}`;
+          const total = document.createElement("p");
+          const totalValue = document.createElement("strong");
+          totalValue.textContent = euro(transaction.totalCents);
+          total.append("Gesamtpreis: ", totalValue);
+          const balanceLine = document.createElement("p");
+          const balance = document.createElement("strong");
+          balance.className = "balance";
+          balance.textContent = euro(balances.get(transaction.id));
+          balanceLine.append("Guthaben nach der Buchung: ", balance);
+          prices.append(unit, total, balanceLine);
+          details.append(summary, prices);
+          entry.append(details);
+          $("report-list").append(entry);
         }
       }
 
@@ -1719,6 +1852,7 @@
 
       $("show-statistics").addEventListener("click", () => {
         reportView = "statistics";
+        statisticsMonth = monthKey();
         renderReport();
       });
 
