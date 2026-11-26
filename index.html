@@ -1138,6 +1138,8 @@
             Rechnung herunterladen
           </button>
           <p id="invoice-error" class="error" role="alert" hidden></p>
+          <input id="monthly-person-search" type="search" aria-label="Person im Monatsbericht suchen"
+            placeholder="Person suchen" autocomplete="off" />
           <ul id="monthly-list" class="monthly-list"></ul>
         </section>
 
@@ -1392,12 +1394,15 @@
       let pickingBalancePerson = false;
       let balancePersonId = null;
 
+      function matchingPeople(entries, query) {
+        const search = query.trim().toLocaleLowerCase("de");
+        return entries.filter((person) => [beerNameOf(person), person.name]
+          .some((name) => name.toLocaleLowerCase("de").includes(search)));
+      }
+
       function renderPeople() {
         const selectedId = pickingBalancePerson ? balancePersonId : activePerson.id;
-        const search = $("person-search").value.trim().toLocaleLowerCase("de");
-        const matches = people.filter((p) =>
-          [beerNameOf(p), p.name].some((name) => name.toLocaleLowerCase("de").includes(search)),
-        );
+        const matches = matchingPeople(people, $("person-search").value);
         $("people-list").replaceChildren();
         for (const person of matches) {
           const button = document.createElement("button");
@@ -1439,7 +1444,6 @@
         $("person-search").value = "";
         renderPeople();
         showDialog("people-dialog");
-        $("person-search").focus();
       }
       $("people").addEventListener("click", () => openPersonSearch(false));
       $("balance-person").addEventListener("click", () => openPersonSearch(true));
@@ -2072,7 +2076,15 @@
         amount.textContent = euro(totalDebt);
         $("monthly-total").replaceChildren("Schulden gesamt: ", amount);
 
-        for (const person of entries) {
+        const matches = matchingPeople(entries, $("monthly-person-search").value);
+        if (!matches.length) {
+          const empty = document.createElement("li");
+          empty.className = "empty";
+          empty.textContent = "Keine Person gefunden.";
+          $("monthly-list").append(empty);
+        }
+
+        for (const person of matches) {
           const row = document.createElement("li");
           const button = document.createElement("button");
           button.type = "button";
@@ -2121,6 +2133,7 @@
         }
         if (view === "monthly") {
           $("admin-month").value = monthKey();
+          $("monthly-person-search").value = "";
           renderMonthlyReport();
         }
       }
@@ -2206,6 +2219,7 @@
       $("new-balance").addEventListener("input", updateBalanceSaveButton);
       $("edit-beer-name").addEventListener("input", updateBalanceSaveButton);
       $("admin-month").addEventListener("input", renderMonthlyReport);
+      $("monthly-person-search").addEventListener("input", renderMonthlyReport);
       let invoiceDownloading = false;
       $("download-invoice").addEventListener("click", async () => {
         if (invoiceDownloading) return;
