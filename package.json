@@ -1,0 +1,11 @@
+{
+  "name": "tresen-db",
+  "version": "1.0.0",
+  "description": "Abrechnungssystem für den Tresen",
+  "type": "commonjs",
+  "private": true,
+  "dependencies": {
+    "@netlify/database": "^2.0.4",
+    "pg": "^8.23.1"
+  }
+}

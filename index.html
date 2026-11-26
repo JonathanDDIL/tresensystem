@@ -810,7 +810,7 @@
         <button id="accept-number" class="primary">Übernehmen</button>
       </div>
     </dialog>
-    <!-- POPUP 4: Persönlicher Bericht über alle lokal gespeicherten Monate. -->
+    <!-- POPUP 4: Persönlicher Bericht über alle gespeicherten Monate. -->
     <dialog id="report-dialog" class="modal" aria-labelledby="report-title">
       <div class="modal-body">
         <div class="modal-head">
@@ -825,7 +825,7 @@
         </div>
         <p id="report-person" class="report-person"></p>
         <p class="report-caption">
-          Alle auf diesem Gerät gespeicherten Monate. Datum und Uhrzeit werden
+          Alle gespeicherten Monate. Datum und Uhrzeit werden
           in der lokalen Zeitzone angezeigt.
         </p>
         <div id="report-options" class="report-options">
@@ -986,8 +986,7 @@
     <script>
       "use strict";
 
-      // 1. Konfiguration: Name des lokalen Datenspeichers.
-      const STORAGE_KEY = "tresensystem.v1";
+      const API_URL = "/.netlify/functions/tresen";
 
       // 2. Personen: feste IDs, Anzeigenamen und eindeutige NFC-Platzhalter.
       let people = Array.from({ length: 99 }, (_, i) => ({
@@ -1004,8 +1003,13 @@
       }));
 
       // 4. Hilfsfunktionen für Abrechnungsmonat, Guthaben und Euro-Anzeige.
+      const monthFormat = new Intl.DateTimeFormat("sv-SE", {
+        timeZone: "Europe/Berlin",
+        year: "numeric",
+        month: "2-digit",
+      });
       function monthKey(date = new Date()) {
-        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        return monthFormat.format(date);
       }
       function balanceFor(
         personId,
@@ -1114,20 +1118,51 @@
         };
       }
 
-      // 5. Buchungsjournal laden. Bei Speicherfehlern werden Buchungen gesperrt.
-      let state = normalizeState({ version: 1, transactions: [] }),
-        storageReady = true;
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw !== null) {
-          const saved = JSON.parse(raw);
-          if (!validState(saved)) throw Error("invalid");
-          state = normalizeState(saved);
-          people = state.people;
+      let state = normalizeState({ version: 1, revision: -1, transactions: [] }),
+        storageReady = false,
+        bookingPending = false,
+        pendingBooking = null,
+        loadingState = null;
+
+      async function requestState(change) {
+        const response = await fetch(API_URL, change ? {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(change),
+        } : { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok) {
+          const error = Error(result.error || "Serveranfrage fehlgeschlagen.");
+          error.rejected = response.status === 400;
+          throw error;
         }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      } catch {
-        storageReady = false;
+        if (!validState(result.state) || !Number.isSafeInteger(result.state.revision))
+          throw Error("Der Server hat ungültige Daten geliefert.");
+        return result;
+      }
+
+      function useServerState(saved) {
+        if (saved.revision < state.revision) return;
+        state = normalizeState(saved);
+        people = state.people;
+        activePerson =
+          people.find((person) => person.id === activePerson.id) || people[0];
+        storageReady = true;
+        updateAccount();
+      }
+
+      function refreshState() {
+        const revision = state.revision;
+        loadingState ??= requestState()
+          .then(({ state: saved }) => useServerState(saved))
+          .catch(() => {
+            if (state.revision !== revision) return;
+            storageReady = false;
+            updateAccount();
+            $("book").disabled = true;
+          })
+          .finally(() => { loadingState = null; });
+        return loadingState;
       }
 
       // 6. Bedienzustand: aktive Person, gewähltes Getränk und offene Eingaben.
@@ -1149,14 +1184,13 @@
         $("person-name").textContent = activePerson.name;
         $("account-balance").textContent = euro(balanceFor(activePerson.id));
         $("month").textContent = new Intl.DateTimeFormat("de-DE", {
+          timeZone: "Europe/Berlin",
           month: "long",
           year: "numeric",
         }).format(new Date());
-        if (!storageReady) {
-          $("storage-error").hidden = false;
-          $("storage-error").textContent =
-            "Der lokale Speicher ist nicht verfügbar oder enthält ungültige Daten. Buchungen sind gesperrt.";
-        }
+        $("storage-error").hidden = storageReady;
+        $("storage-error").textContent = storageReady ? "" :
+          "Serverdaten sind gerade nicht verfügbar. Bitte erneut versuchen.";
       }
       function showDialog(id) {
         $(id).showModal();
@@ -1171,11 +1205,13 @@
       }
 
       // 8. Chip-Schaltfläche: Hauptseite mit Person 01 als aktivem Konto öffnen.
-      $("scan").addEventListener("click", () => {
+      $("scan").addEventListener("click", async () => {
+        $("scan").disabled = true;
+        await refreshState();
+        $("scan").disabled = false;
+        resetDisplay();
         $("start").hidden = true;
         $("app").hidden = false;
-        updateAccount();
-        resetDisplay();
       });
 
       // 9. Personenwahl: Suchtext filtern, Guthaben anzeigen und Auswahl übernehmen.
@@ -1213,7 +1249,9 @@
           $("people-list").append(empty);
         }
       }
-      $("people").addEventListener("click", () => {
+      $("people").addEventListener("click", async () => {
+        await refreshState();
+        if (!storageReady) return;
         $("person-search").value = "";
         renderPeople();
         showDialog("people-dialog");
@@ -1228,7 +1266,10 @@
       }
 
       // Ein Getränk öffnen und dessen Mengenauswahl auf 1 setzen.
-      function openProduct(drink) {
+      async function openProduct(drink) {
+        if (bookingPending) return;
+        await refreshState();
+        if (!storageReady || bookingPending || $("product-dialog").open) return;
         selectedDrink = drink;
         quantity = 1;
         reviewMonth = null;
@@ -1298,7 +1339,7 @@
           }
           $("details").append(dt, dd);
         });
-        $("book").disabled = !storageReady;
+        $("book").disabled = !storageReady || bookingPending;
       }
       $("confirm").addEventListener("click", review);
       $("back").addEventListener("click", () => {
@@ -1311,7 +1352,7 @@
         $("booking-error").textContent = message;
         $("booking-error").hidden = false;
       }
-      $("book").addEventListener("click", () => {
+      $("book").addEventListener("click", async () => {
         if (!selectedDrink || !storageReady || $("book").disabled) return;
         if (quantity === 0) {
           showBookingError("Bitte eine Anzahl von mindestens 1 wählen.");
@@ -1324,51 +1365,35 @@
           );
           return;
         }
+        const booking = {
+          action: "book",
+          personId: activePerson.id,
+          productId: selectedDrink.id,
+          quantity,
+          month: reviewMonth,
+        };
+        const key = JSON.stringify(booking);
+        if (pendingBooking?.key !== key)
+          pendingBooking = { key, id: crypto.randomUUID() };
+
+        bookingPending = true;
         $("book").disabled = true;
         try {
-          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-          if (!validState(saved)) throw Error("invalid");
-          if (JSON.stringify(normalizeState(saved)) !== JSON.stringify(state)) {
-            state = normalizeState(saved);
-            people = state.people;
-            updateAccount();
-            review();
-            showBookingError(
-              "Die Buchungsdaten wurden geändert. Bitte die aktualisierten Beträge prüfen.",
-            );
-            return;
-          }
-          // Preise und Gesamtbeträge werden als ganze Centbeträge gespeichert.
-          const transaction = {
-            id: crypto.randomUUID(),
-            personId: activePerson.id,
-            personName: activePerson.name,
-            nfcId: activePerson.nfcId,
-            productId: selectedDrink.id,
-            productName: selectedDrink.name,
-            quantity,
-            unitPriceCents: selectedDrink.priceCents,
-            totalCents: quantity * selectedDrink.priceCents,
-            createdAt: new Date().toISOString(),
-            month: monthKey(),
-          };
-          const next = {
-            ...state,
-            transactions: [...state.transactions, transaction],
-          };
-          // Erst nach erfolgreichem Speichern gilt die Buchung als abgeschlossen.
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-          state = next;
-          updateAccount();
+          const { state: saved, transaction } = await requestState({
+            ...booking, id: pendingBooking.id,
+          });
+          pendingBooking = null;
+          useServerState(saved);
+          if (activePerson.id !== transaction.personId) return;
           $("display-title").textContent = "Buchung erfolgreich";
           $("display-title").closest(".display").classList.add("has-booking");
           $("receipt").hidden = false;
           $("receipt").replaceChildren();
           const title = document.createElement("strong");
-          title.textContent = `${quantity} × ${selectedDrink.name}`;
+          title.textContent = `${transaction.quantity} × ${transaction.productName}`;
           $("receipt").append(title);
           for (const [label, value] of [
-            ["Gebucht für", activePerson.name],
+            ["Gebucht für", transaction.personName],
             ["Gesamtpreis", euro(transaction.totalCents)],
             ["Neues Guthaben", euro(balanceFor(activePerson.id))],
           ]) {
@@ -1384,12 +1409,13 @@
           }
           $("product-dialog").close();
           selectedDrink = null;
-        } catch {
-          storageReady = false;
-          updateAccount();
-          showBookingError(
-            "Buchung konnte nicht sicher gespeichert werden. Es wurde keine Buchung bestätigt.",
-          );
+        } catch (error) {
+          if (error.rejected) pendingBooking = null;
+          showBookingError(error.rejected ? error.message :
+            "Keine Bestätigung erhalten. Dieselbe Buchung kann erneut versucht werden.");
+        } finally {
+          bookingPending = false;
+          $("book").disabled = !storageReady;
         }
       });
 
@@ -1577,7 +1603,9 @@
         }
       }
 
-      $("report").addEventListener("click", () => {
+      $("report").addEventListener("click", async () => {
+        await refreshState();
+        if (!storageReady) return;
         reportView = "overview";
         renderReport();
         showDialog("report-dialog");
@@ -1598,7 +1626,7 @@
         renderReport();
       });
 
-      // 21. Bierwartverwaltung: Pseudozugang und lokal gespeicherte Kontoverwaltung.
+      // 21. Bierwartverwaltung: Testzugang und serverseitig gespeicherte Kontoverwaltung.
       // Die Passwortprüfung ist bewusst nur eine Bedienhürde und keine Anmeldung am Server.
       let adminUnlocked = false;
       let adminView = "overview";
@@ -1607,17 +1635,6 @@
         $("admin-message").textContent = message;
         $("admin-message").dataset.error = String(isError);
         $("admin-message").hidden = false;
-      }
-
-      function nextPersonNumber(users = people) {
-        return (
-          Math.max(
-            0,
-            ...users.map(
-              (person) => Number(person.id.replace("person-", "")) || 0,
-            ),
-          ) + 1
-        );
       }
 
       function updateAdminPersonOptions() {
@@ -1733,32 +1750,18 @@
         }
       }
 
-      // Änderungen auf den neuesten Datenstand anwenden und erst nach erfolgreicher Speicherung anzeigen.
-      function saveAdminChange(change) {
+      async function saveAdminChange(change) {
         if (!adminUnlocked)
           throw Error("Bitte den Bierwartbereich erneut öffnen.");
-        if (!storageReady)
-          throw Error(
-            "Der lokale Speicher ist nicht verfügbar. Es wurden keine Änderungen gespeichert.",
-          );
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        if (!validState(saved))
-          throw Error("Die gespeicherten Daten sind ungültig.");
-        const next = normalizeState(saved);
-        change(next);
-        if (!validState(next))
-          throw Error("Die Änderung enthält ungültige Daten.");
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-        state = next;
-        people = state.people;
-        activePerson =
-          people.find((person) => person.id === activePerson.id) || people[0];
-        updateAccount();
+        const { state: saved } = await requestState(change);
+        useServerState(saved);
         if ($("people-dialog").open) renderPeople();
         if ($("report-dialog").open) renderReport();
       }
 
-      $("bierwart").addEventListener("click", () => {
+      $("bierwart").addEventListener("click", async () => {
+        await refreshState();
+        if (!storageReady) return;
         $("bierwart-password").value = "";
         $("bierwart-login-error").hidden = true;
         showDialog("bierwart-login");
@@ -1796,7 +1799,7 @@
       $("new-balance").addEventListener("input", updateBalanceSaveButton);
       $("admin-month").addEventListener("input", renderMonthlyReport);
 
-      $("create-person-form").addEventListener("submit", (event) => {
+      $("create-person-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         const name = $("new-person-name").value.trim();
         const nfcId = $("new-person-nfc").value.trim();
@@ -1805,26 +1808,7 @@
             throw Error("Bitte Name und NFC-Kennung eingeben.");
           if (name.length > 80 || nfcId.length > 120)
             throw Error("Name oder NFC-Kennung ist zu lang.");
-          saveAdminChange((next) => {
-            if (
-              next.people.some(
-                (person) =>
-                  person.name.toLocaleLowerCase("de") ===
-                  name.toLocaleLowerCase("de"),
-              )
-            )
-              throw Error("Dieser Name ist bereits vergeben.");
-            if (next.people.some((person) => person.nfcId === nfcId))
-              throw Error("Diese NFC-Kennung ist bereits vergeben.");
-            next.people.push({
-              id: `person-${String(nextPersonNumber(next.people)).padStart(2, "0")}`,
-              name,
-              nfcId,
-            });
-            next.people.sort((a, b) =>
-              a.name.localeCompare(b.name, "de", { numeric: true }),
-            );
-          });
+          await saveAdminChange({ action: "create-person", name, nfcId });
           adminMessage(`${name} wurde mit 0,00 € Guthaben angelegt.`);
           $("new-person-name").value = "";
           $("new-person-nfc").value = "";
@@ -1834,7 +1818,7 @@
       });
 
       // Zielguthaben als Differenz zum bisherigen Stand speichern; die Historie bleibt unverändert.
-      $("change-balance-form").addEventListener("submit", (event) => {
+      $("change-balance-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         try {
           const targetCents = parseEuroInput($("new-balance").value);
@@ -1843,27 +1827,7 @@
               "Bitte einen gültigen Eurobetrag mit höchstens zwei Nachkommastellen eingeben.",
             );
           const personId = $("balance-person").value;
-          saveAdminChange((next) => {
-            if (!next.people.some((person) => person.id === personId))
-              throw Error("Person nicht gefunden.");
-            const month = monthKey();
-            const current = balanceFor(
-              personId,
-              month,
-              next.transactions,
-              next.adjustments,
-            );
-            const amountCents = targetCents - current;
-            if (amountCents !== 0)
-              next.adjustments.push({
-                id: crypto.randomUUID(),
-                personId,
-                amountCents,
-                month,
-                createdAt: new Date().toISOString(),
-                reason: "Guthaben durch Bierwart festgelegt",
-              });
-          });
+          await saveAdminChange({ action: "set-balance", personId, targetCents });
           updateAdminBalance();
           adminMessage(`Guthaben gespeichert: ${euro(targetCents)}.`);
           resetDisplay();
@@ -1880,34 +1844,6 @@
             $(button.dataset.close).close(),
           ),
         );
-
-      // 17. Änderungen aus anderen Tabs erkennen und die Anzeige aktualisieren.
-      window.addEventListener("storage", (event) => {
-        if (event.key !== STORAGE_KEY) return;
-        try {
-          const saved = JSON.parse(event.newValue);
-          if (!validState(saved)) throw Error("invalid");
-          state = normalizeState(saved);
-          people = state.people;
-          updateAccount();
-          if ($("people-dialog").open) renderPeople();
-          if ($("report-dialog").open) renderReport();
-          if ($("bierwart-dialog").open && adminView === "monthly")
-            renderMonthlyReport();
-          if ($("bierwart-dialog").open && adminView === "balance")
-            updateAdminPersonOptions();
-          if ($("product-dialog").open && !$("review-step").hidden) {
-            review();
-            showBookingError(
-              "Guthaben aktualisiert. Bitte die Beträge erneut prüfen.",
-            );
-          }
-        } catch {
-          storageReady = false;
-          updateAccount();
-          $("book").disabled = true;
-        }
-      });
 
       // 18. Monatswechsel erkennen. Alte Buchungen bleiben im Journal erhalten.
       function refreshMonth() {
@@ -1932,10 +1868,18 @@
 
       // 19. Monatsprüfung regelmäßig und nach Rückkehr zur Seite ausführen.
       setInterval(refreshMonth, 15000);
-      document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) refreshMonth();
+      document.addEventListener("visibilitychange", async () => {
+        if (document.hidden || $("app").hidden) return;
+        refreshMonth();
+        const previousRevision = state.revision;
+        await refreshState();
+        if (!storageReady || previousRevision === state.revision) return;
+        if ($("people-dialog").open) renderPeople();
+        if ($("report-dialog").open) renderReport();
+        if ($("bierwart-dialog").open && adminView === "monthly") renderMonthlyReport();
+        if ($("bierwart-dialog").open && adminView === "balance") updateAdminPersonOptions();
+        if (!bookingPending && $("product-dialog").open && !$("review-step").hidden) review();
       });
-      updateAccount();
     </script>
   </body>
 </html>
