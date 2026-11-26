@@ -718,8 +718,18 @@
         border: 0;
       }
 
-      .inventory-fields legend {
-        margin-bottom: 8px;
+      #inventory-drink-dialog {
+        width: min(360px, calc(100vw - 32px));
+      }
+
+      .inventory-drink-actions {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .inventory-drink-actions button {
+        padding-inline: 16px;
       }
 
       .inventory-item {
@@ -1224,12 +1234,7 @@
             <input id="inventory-date" type="date" required />
           </label>
           <fieldset id="inventory-fields" class="inventory-fields" hidden>
-            <legend id="inventory-legend">Gezählter Bestand in Flaschen</legend>
             <div id="inventory-items" class="admin-form"></div>
-            <label class="admin-field">
-              Neues Getränk
-              <input id="inventory-new-drink" type="text" maxlength="80" />
-            </label>
             <button id="inventory-add" type="button">Getränk hinzufügen</button>
             <button id="inventory-save" type="submit" class="primary positive">Inventur eintragen</button>
           </fieldset>
@@ -1248,6 +1253,21 @@
 
         <p id="admin-message" class="admin-message" role="status" hidden></p>
       </div>
+    </dialog>
+
+    <dialog id="inventory-drink-dialog" class="modal" aria-labelledby="inventory-drink-title">
+      <form id="inventory-drink-form" class="modal-body">
+        <h2 id="inventory-drink-title">Getränk hinzufügen</h2>
+        <label class="admin-field">
+          Getränkename
+          <input id="inventory-new-drink" type="text" maxlength="80" required />
+        </label>
+        <p id="inventory-drink-error" class="error" role="alert" hidden></p>
+        <div class="inventory-drink-actions">
+          <button type="button" data-close="inventory-drink-dialog">Abbrechen</button>
+          <button type="submit" class="positive">Speichern</button>
+        </div>
+      </form>
     </dialog>
 
     <!-- JAVASCRIPT: Daten, Speicherung und Reaktionen auf die Bedienung. -->
@@ -2310,19 +2330,27 @@
       });
 
       $("inventory-add").addEventListener("click", () => {
+        $("inventory-drink-form").reset();
+        $("inventory-drink-error").hidden = true;
+        showDialog("inventory-drink-dialog");
+      });
+
+      $("inventory-drink-form").addEventListener("submit", (event) => {
+        event.preventDefault();
         const input = $("inventory-new-drink");
         const name = input.value.trim();
         const exists = [...$("inventory-items").querySelectorAll("input")].some(
           ({ dataset }) => dataset.drink.toLocaleLowerCase("de") === name.toLocaleLowerCase("de"),
         );
         if (!name || exists) {
-          adminMessage(exists ? "Dieses Getränk gibt es bereits." : "Bitte einen Getränkenamen eingeben.", true);
+          const error = $("inventory-drink-error");
+          error.textContent = exists ? "Dieses Getränk gibt es bereits." : "Bitte einen Getränkenamen eingeben.";
+          error.hidden = false;
           input.focus();
           return;
         }
         addInventoryItem(name);
-        input.value = "";
-        $("admin-message").hidden = true;
+        $("inventory-drink-dialog").close();
         $("inventory-items").lastElementChild.querySelector("input").focus();
       });
 
@@ -2396,7 +2424,6 @@
         if (view === "inventory" || view === "delivery") {
           const delivery = view === "delivery";
           $("inventory-date-label").textContent = delivery ? "Lieferdatum" : "Inventurdatum";
-          $("inventory-legend").textContent = delivery ? "Gelieferte Flaschen" : "Gezählter Bestand in Flaschen";
           $("inventory-save").textContent = delivery ? "Lieferung eintragen" : "Inventur eintragen";
           $("admin-inventory-form").reset();
           $("inventory-date").max = inventoryDayFormat.format(new Date());
