@@ -193,9 +193,6 @@
         min-height: 0;
         overflow: auto;
       }
-      .display.has-booking {
-        grid-template-rows: auto auto 1fr;
-      }
       .display-head {
         display: flex;
         justify-content: space-between;
@@ -212,6 +209,9 @@
         font-size: clamp(22px, 4vw, 34px);
         text-align: center;
       }
+      .display.has-booking h1 {
+        text-align: left;
+      }
       .receipt {
         display: flex;
         flex-direction: column;
@@ -227,6 +227,10 @@
         gap: 16px;
         font-size: clamp(15px, 2.5vw, 20px);
       }
+      .receipt-line > :last-child {
+        text-align: right;
+      }
+
       /* 7. Getränkeraster: vier Spalten und drei Zeilen */
       .grid {
         display: grid;
