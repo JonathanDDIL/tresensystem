@@ -327,15 +327,17 @@
         max-height: calc(100dvh - 32px);
         overflow: auto;
       }
+      .modal-body:has(> .modal-head) {
+        padding-block-start: 0;
+        scroll-padding-block-start: calc(var(--modal-padding) + 56px);
+      }
       .modal-head {
         position: sticky;
         inset-block-start: 0;
         z-index: 1;
         flex-shrink: 0;
-        margin-block-start: calc(-1 * var(--modal-padding));
         margin-inline: calc(-1 * var(--modal-padding));
         padding: var(--modal-padding) var(--modal-padding) 8px;
-        margin-block-end: -8px;
         background: var(--white);
         display: flex;
         align-items: center;
@@ -1093,6 +1095,7 @@
           <button
             class="close"
             data-close="bierwart-login"
+            autofocus
             aria-label="Passwortfenster schließen"
           >
             ×
