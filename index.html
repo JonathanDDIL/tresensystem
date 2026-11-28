@@ -804,6 +804,36 @@
         color: var(--white);
       }
 
+      .protocol-deliveries {
+        display: grid;
+        gap: 14px;
+        margin-top: 18px;
+      }
+
+      .protocol-deliveries table {
+        width: 100%;
+        border-collapse: collapse;
+        border-top: 2px solid var(--red);
+        font-size: 14px;
+      }
+
+      .protocol-deliveries caption {
+        padding-bottom: 6px;
+        text-align: start;
+        font-weight: 700;
+      }
+
+      .protocol-deliveries :is(th, td) {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--line);
+        text-align: start;
+      }
+
+      .protocol-deliveries :is(th, td):last-child {
+        text-align: end;
+        font-variant-numeric: tabular-nums;
+      }
+
       #range-selection {
         margin-top: 12px;
       }
@@ -1351,6 +1381,11 @@
           </div>
           <div id="range-days" class="range-days"></div>
           <p id="range-selection" class="report-caption" aria-live="polite"></p>
+          <section class="protocol-deliveries" aria-labelledby="protocol-delivery-title">
+            <h3 id="protocol-delivery-title">Lieferungen</h3>
+            <p id="protocol-delivery-empty" class="report-caption" hidden>Keine Lieferungen gefunden.</p>
+            <div id="protocol-delivery-tables" class="admin-form"></div>
+          </section>
         </section>
 
         <p id="admin-message" class="admin-message" role="status" hidden></p>
@@ -2529,7 +2564,36 @@
       });
       const rangeDate = (day) => new Date(day + "T00:00:00Z");
 
+      function renderProtocolDeliveries() {
+        const deliveries = (state.inventory?.deliveries || [])
+          .filter(({ date }) => !rangeEnd || (date >= rangeStart && date <= rangeEnd))
+          .sort((a, b) => b.date.localeCompare(a.date) || b.recordedAt.localeCompare(a.recordedAt));
+        const container = $("protocol-delivery-tables");
+        container.replaceChildren();
+        $("protocol-delivery-empty").hidden = deliveries.length > 0;
+        for (const delivery of deliveries) {
+          const table = document.createElement("table");
+          table.createCaption().textContent = "Lieferung vom " + rangeDateFormat.format(rangeDate(delivery.date));
+          const heading = table.createTHead().insertRow();
+          for (const label of ["Getränk", "Gelieferte Anzahl"]) {
+            const column = document.createElement("th");
+            column.scope = "col";
+            column.textContent = label;
+            heading.append(column);
+          }
+          const body = table.createTBody();
+          for (const { name, bottles } of delivery.items) {
+            if (bottles <= 0) continue;
+            const row = body.insertRow();
+            row.insertCell().textContent = name;
+            row.insertCell().textContent = bottles;
+          }
+          container.append(table);
+        }
+      }
+
       function renderRangeCalendar(focusDay) {
+        renderProtocolDeliveries();
         const first = rangeDate(rangeMonth + "-01");
         $("range-month").textContent = monthLabelFormat.format(first);
         const days = $("range-days");
@@ -2974,6 +3038,7 @@
         if ($("bierwart-dialog").open && adminView === "monthly") renderMonthlyReport();
         if ($("bierwart-dialog").open && adminView === "balance") updateAdminBalance();
         if ($("bierwart-dialog").open && adminView === "stock") renderStock();
+        if ($("bierwart-dialog").open && adminView === "convent") renderProtocolDeliveries();
         if (!bookingPending && $("product-dialog").open && !$("review-step").hidden) review();
       });
     </script>
