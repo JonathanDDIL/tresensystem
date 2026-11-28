@@ -1176,6 +1176,9 @@
               required
             />
           </label>
+          <label class="admin-field">Passwort
+            <input id="new-person-password" type="password" maxlength="128" autocomplete="new-password" required />
+          </label>
           <p class="report-caption">
             Neue Personen starten mit 0,00 € Guthaben.
           </p>
@@ -1291,6 +1294,51 @@
       </form>
     </dialog>
 
+    <dialog id="person-password-dialog" class="modal" aria-labelledby="person-password-title">
+      <form id="person-password-form" class="modal-body">
+        <div class="modal-head">
+          <h2 id="person-password-title">Konto wechseln</h2>
+          <button type="button" class="close" data-close="person-password-dialog" aria-label="Schließen">×</button>
+        </div>
+        <p id="person-password-name"></p>
+        <label class="admin-field">Passwort
+          <input id="person-password" type="password" maxlength="128" required />
+        </label>
+        <p id="person-password-error" class="error" role="alert" hidden></p>
+        <button id="person-password-save" type="submit" class="primary positive">Anmelden</button>
+      </form>
+    </dialog>
+    <dialog id="topup-dialog" class="modal" aria-labelledby="topup-title">
+      <div class="modal-body">
+        <div class="modal-head">
+          <h2 id="topup-title">Aufladen</h2>
+          <button type="button" class="close" data-close="topup-dialog" aria-label="Schließen">×</button>
+        </div>
+        <p id="topup-person"></p>
+        <form id="topup-amount-form" class="admin-form">
+          <label class="admin-field">Betrag in Euro
+            <input id="topup-amount" inputmode="decimal" maxlength="20" required />
+          </label>
+          <button class="primary" type="submit">Weiter zur Bestätigung</button>
+        </form>
+        <form id="topup-chip-form" class="admin-form" hidden>
+          <p id="topup-summary"></p>
+          <label class="admin-field">Chip einer anderen Person auflegen
+            <input id="topup-chip" type="password" autocomplete="off" inputmode="none" maxlength="120" required />
+          </label>
+          <button class="primary" type="submit">Chip prüfen</button>
+        </form>
+        <form id="topup-password-form" class="admin-form" hidden>
+          <p id="topup-approver"></p>
+          <label class="admin-field">Passwort der bestätigenden Person
+            <input id="topup-password" type="password" maxlength="128" required />
+          </label>
+          <button class="primary positive" type="submit">Aufladung bestätigen</button>
+        </form>
+        <p id="topup-message" role="status" hidden></p>
+      </div>
+    </dialog>
+
     <!-- JAVASCRIPT: Daten, Speicherung und Reaktionen auf die Bedienung. -->
     <script>
       "use strict";
@@ -1370,15 +1418,12 @@
               person &&
               typeof person.id === "string" &&
               typeof person.name === "string" &&
-              person.name.trim() &&
-              typeof person.nfcId === "string" &&
-              person.nfcId.trim(),
+              person.name.trim(),
           )
         )
           return false;
         if (
-          new Set(users.map((person) => person.id)).size !== users.length ||
-          new Set(users.map((person) => person.nfcId)).size !== users.length
+          new Set(users.map((person) => person.id)).size !== users.length
         )
           return false;
 
@@ -1565,9 +1610,7 @@
               updateAdminBalance(true);
               return;
             }
-            activePerson = person;
-            updateAccount();
-            resetDisplay();
+            if (person.id !== activePerson.id) openPersonPassword(person);
           });
           $("people-list").append(button);
         }
@@ -1631,8 +1674,137 @@
           "aria-label",
           `Taste ${button.textContent}, ohne zugewiesene Funktion`,
         );
+        if (row === 0) {
+          button.setAttribute("aria-label", "A – Aufladen");
+          button.addEventListener("click", openTopup);
+        }
         $("products").append(button);
       }
+
+      let loginPersonId;
+      function openPersonPassword(person) {
+        loginPersonId = person.id;
+        renderPersonName($("person-password-name"), person);
+        $("person-password-form").reset();
+        $("person-password-error").hidden = true;
+        showDialog("person-password-dialog");
+      }
+
+      $("person-password-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const save = $("person-password-save");
+        if (save.disabled) return;
+        const personId = loginPersonId;
+        const field = $("person-password");
+        save.disabled = true;
+        try {
+          const { state: saved } = await requestState({ action: "verify-person", personId, password: field.value });
+          if (!$("person-password-dialog").open || loginPersonId !== personId) return;
+          useServerState(saved);
+          activePerson = people.find(({ id }) => id === personId);
+          updateAccount();
+          resetDisplay();
+          $("person-password-dialog").close();
+        } catch (error) {
+          const message = $("person-password-error");
+          message.textContent = error.message;
+          message.hidden = false;
+          field.value = "";
+          field.focus();
+        } finally {
+          save.disabled = false;
+        }
+      });
+
+      let topup;
+      function showTopupError(error) {
+        const message = $("topup-message");
+        message.className = "error";
+        message.textContent = error.message;
+        message.hidden = false;
+      }
+
+      function openTopup() {
+        if (!activePerson || !storageReady || topup?.busy) return;
+        topup = { id: crypto.randomUUID(), personId: activePerson.id };
+        renderPersonName($("topup-person"), activePerson);
+        for (const step of ["amount", "chip", "password"]) {
+          const form = $("topup-" + step + "-form");
+          form.reset();
+          form.hidden = step !== "amount";
+        }
+        $("topup-message").hidden = true;
+        showDialog("topup-dialog");
+      }
+
+      $("topup-amount-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const amount = parseEuroInput($("topup-amount").value);
+        if (amount === null || amount <= 0) {
+          showTopupError(new Error("Bitte einen Betrag über 0,00 € eingeben."));
+          return;
+        }
+        topup.amountCents = amount;
+        $("topup-message").hidden = true;
+        $("topup-summary").textContent = `Aufladebetrag: ${euro(amount)}`;
+        $("topup-amount-form").hidden = true;
+        $("topup-chip-form").hidden = false;
+        $("topup-chip").focus();
+      });
+
+      $("topup-chip-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (topup.busy) return;
+        const current = topup;
+        const field = $("topup-chip");
+        current.chip = field.value.trim();
+        current.busy = true;
+        try {
+          const { personId, state: saved } = await requestState({
+            action: "identify-chip", personId: current.personId, chip: current.chip,
+          });
+          if (!$("topup-dialog").open || current !== topup) return;
+          useServerState(saved);
+          renderPersonName($("topup-approver"), people.find(({ id }) => id === personId));
+          $("topup-message").hidden = true;
+          $("topup-chip-form").hidden = true;
+          $("topup-password-form").hidden = false;
+          $("topup-password").focus();
+        } catch (error) {
+          showTopupError(error);
+          field.focus();
+        } finally {
+          field.value = "";
+          current.busy = false;
+        }
+      });
+
+      $("topup-password-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (topup.busy) return;
+        const current = topup;
+        const field = $("topup-password");
+        current.busy = true;
+        try {
+          const { state: saved } = await requestState({
+            action: "topup", id: current.id, personId: current.personId,
+            chip: current.chip, amountCents: current.amountCents, password: field.value,
+          });
+          useServerState(saved);
+          $("topup-password-form").hidden = true;
+          const message = $("topup-message");
+          message.className = "";
+          message.textContent = `${euro(current.amountCents)} aufgeladen. Neues Guthaben: ${euro(balanceFor(current.personId))}.`;
+          message.hidden = false;
+          resetDisplay();
+        } catch (error) {
+          showTopupError(error);
+          field.focus();
+        } finally {
+          field.value = "";
+          current.busy = false;
+        }
+      });
 
       // 12. Minus und Plus ändern die Anzahl innerhalb der festgelegten Grenzen.
       $("minus").addEventListener("click", () => {
@@ -2059,7 +2231,8 @@
         $("report-total").textContent =
           `${totalQuantity} Getränke insgesamt · ${transactions.length} Buchungen`;
 
-        if (!transactions.length) {
+        const topups = state.adjustments.filter((entry) => entry.personId === person.id && entry.kind === "topup");
+        if (!transactions.length && !topups.length) {
           const empty = document.createElement("li");
           empty.className = "empty";
           empty.textContent =
@@ -2070,12 +2243,15 @@
 
         const balances = bookingBalances(person.id);
         // Neueste Buchungen zuerst. Gespeicherte Preise bleiben auch bei Preisänderungen korrekt.
-        for (const transaction of transactions) {
+        const history = [...transactions, ...topups]
+          .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+        for (const transaction of history) {
+          const isTopup = transaction.kind === "topup";
           const entry = document.createElement("li");
           entry.className = "history-entry";
 
           const product = document.createElement("strong");
-          product.textContent = `${transaction.quantity} × ${transaction.productName}`;
+          product.textContent = isTopup ? "Aufladung" : `${transaction.quantity} × ${transaction.productName}`;
 
           const time = document.createElement("time");
           time.dateTime = transaction.createdAt;
@@ -2085,23 +2261,24 @@
           const summary = document.createElement("summary");
           const summaryPrice = document.createElement("strong");
           summaryPrice.className = "history-summary-price";
-          summaryPrice.textContent = euro(transaction.totalCents);
+          summaryPrice.textContent = isTopup ? "+" + euro(transaction.amountCents) : euro(transaction.totalCents);
           summary.append(product, time, summaryPrice);
 
           const prices = document.createElement("div");
           prices.className = "history-prices";
           const unit = document.createElement("p");
-          unit.textContent = `Einzelpreis: ${euro(transaction.unitPriceCents)}`;
+          if (!isTopup) unit.textContent = `Einzelpreis: ${euro(transaction.unitPriceCents)}`;
           const total = document.createElement("p");
           const totalValue = document.createElement("strong");
-          totalValue.textContent = euro(transaction.totalCents);
+          if (!isTopup) totalValue.textContent = euro(transaction.totalCents);
           total.append("Gesamtpreis: ", totalValue);
           const balanceLine = document.createElement("p");
           const balance = document.createElement("strong");
           balance.className = "balance";
-          balance.textContent = euro(balances.get(transaction.id));
+          balance.textContent = euro(isTopup ? transaction.balanceAfterCents : balances.get(transaction.id));
           balanceLine.append("Guthaben nach der Buchung: ", balance);
-          prices.append(unit, total, balanceLine);
+          if (!isTopup) prices.append(unit, total);
+          prices.append(balanceLine);
           details.append(summary, prices);
           entry.append(details);
           $("report-list").append(entry);
@@ -2443,6 +2620,7 @@
           $("new-person-beer-name").value = "";
           $("new-person-name").value = "";
           $("new-person-nfc").value = "";
+          $("new-person-password").value = "";
         }
         if (view === "balance") {
           balancePersonId = null;
@@ -2596,11 +2774,12 @@
             throw Error("Bitte Biername, Vor- und Nachname und NFC-Kennung eingeben.");
           if (beerName.length > 80 || name.length > 80 || nfcId.length > 120)
             throw Error("Name oder NFC-Kennung ist zu lang.");
-          await saveAdminChange({ action: "create-person", beerName, name, nfcId });
+          await saveAdminChange({ action: "create-person", beerName, name, nfcId, password: $("new-person-password").value });
           adminMessage(`${beerName} wurde mit 0,00 € Guthaben angelegt.`);
           $("new-person-beer-name").value = "";
           $("new-person-name").value = "";
           $("new-person-nfc").value = "";
+          $("new-person-password").value = "";
         } catch (error) {
           adminMessage(error.message, true);
         }

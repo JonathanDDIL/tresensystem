@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { getConnectionString } from "@netlify/database";
 import pg from "pg";
 
@@ -44,6 +44,28 @@ function requireUniqueBeerName(data, beerName, exceptId) {
     "Dieser Biername ist bereits vergeben.");
 }
 
+function passwordHash(password, salt) {
+  return scryptSync(password, salt, 32);
+}
+
+function verifyPerson(person, password) {
+  requireInput(person && typeof password === "string" && password.length <= 128,
+    "Falsches Passwort.");
+  const fallback = person.name.trim().split(/\s+/)[0].toLocaleLowerCase("de");
+  const salt = person.passwordSalt || person.id;
+  const expected = person.passwordDigest
+    ? Buffer.from(person.passwordDigest, "hex") : passwordHash(fallback, salt);
+  requireInput(timingSafeEqual(expected, passwordHash(password, salt)), "Falsches Passwort.");
+}
+
+function publicState(data) {
+  return {
+    ...ensureInventory(data),
+    people: data.people.map(({ passwordSalt, passwordDigest, nfcId, ...person }) => person),
+    transactions: data.transactions.map(({ nfcId, ...entry }) => entry),
+  };
+}
+
 function createPerson(data, input) {
   const beerName = typeof input.beerName === "string" ? input.beerName.trim() : "";
   const name = typeof input.name === "string" ? input.name.trim() : "";
@@ -55,7 +77,11 @@ function createPerson(data, input) {
     "Diese NFC-Kennung ist bereits vergeben.");
   const number = Math.max(...data.people.map((person) =>
     Number(person.id.slice("person-".length)))) + 1;
-  data.people.push({ id: "person-" + String(number).padStart(2, "0"), beerName, name, nfcId });
+  requireInput(typeof input.password === "string" && input.password.trim() && input.password.length <= 128,
+    "Bitte ein Passwort eingeben.");
+  const passwordSalt = randomBytes(16).toString("hex");
+  const passwordDigest = passwordHash(input.password, passwordSalt).toString("hex");
+  data.people.push({ passwordSalt, passwordDigest, id: "person-" + String(number).padStart(2, "0"), beerName, name, nfcId });
 }
 
 function balanceAt(data, personId, month) {
@@ -161,6 +187,28 @@ function applyChange(data, input) {
   const now = new Date();
   const month = monthFormat.format(now);
   const createdAt = now.toISOString();
+  if (input.action === "topup") {
+    const approver = data.people.find(({ nfcId }) => nfcId === input.chip);
+    requireInput(approver && approver.id !== person.id, "Bitte den Chip einer anderen Person verwenden.");
+    verifyPerson(approver, input.password);
+    requireInput(typeof input.id === "string" && /^[0-9a-f-]{36}$/i.test(input.id) &&
+      Number.isSafeInteger(input.amountCents) && input.amountCents > 0, "Ungültiger Aufladebetrag.");
+    const previous = data.adjustments.find(({ id }) => id === input.id);
+    if (previous) {
+      requireInput(previous.kind === "topup" && previous.personId === person.id &&
+        previous.amountCents === input.amountCents && previous.approvedBy === approver.id,
+        "Aufladung konnte nicht zugeordnet werden.");
+      return { duplicate: true };
+    }
+    const balanceAfterCents = balanceAt(data, person.id, month) + input.amountCents;
+    requireInput(Number.isSafeInteger(balanceAfterCents), "Ungültiger Kontostand.");
+    data.adjustments.push({
+      id: input.id, kind: "topup", personId: person.id, amountCents: input.amountCents,
+      approvedBy: approver.id, balanceAfterCents, month, createdAt,
+    });
+    return {};
+  }
+
   if (input.action === "set-balance") {
     setBalance(data, person, input, month, createdAt);
     return {};
@@ -218,7 +266,7 @@ async function write(input) {
       await client.query("UPDATE tresen_test_journal SET data = $1 WHERE id = 1", [data]);
     }
     await client.query("COMMIT");
-    return json({ state: ensureInventory(data), transaction });
+    return json({ state: publicState(data), transaction });
   } catch (error) {
     await client.query("ROLLBACK").catch(() => {});
     throw error;
@@ -231,10 +279,20 @@ export default async function handler(request) {
   try {
     if (request.method === "GET") {
       const { rows: [{ data }] } = await getPool().query(journal);
-      return json({ state: ensureInventory(data) });
+      return json({ state: publicState(data) });
     }
     if (request.method !== "POST") return json({ error: "Methode nicht erlaubt." }, 405);
     const input = await request.json().catch(() => null);
+    if (input?.action === "verify-person" || input?.action === "identify-chip") {
+      const { rows: [{ data }] } = await getPool().query(journal);
+      if (input.action === "verify-person") {
+        verifyPerson(data.people.find(({ id }) => id === input.personId), input.password);
+        return json({ state: publicState(data) });
+      }
+      const person = data.people.find(({ nfcId }) => nfcId === input.chip);
+      requireInput(person && person.id !== input.personId, "Bitte den Chip einer anderen Person verwenden.");
+      return json({ state: publicState(data), personId: person.id });
+    }
     return await write(input);
   } catch (error) {
     if (error instanceof RequestError) return json({ error: error.message }, 400);

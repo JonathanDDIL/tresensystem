@@ -32,6 +32,14 @@ export function invoiceEntries(journal, month, cutoff) {
     item.total += booking.totalCents;
     items.set(key, item);
   }
+  for (const entry of journal.adjustments || []) {
+    if (entry.kind !== "topup" || entry.month !== month ||
+        Date.parse(entry.createdAt) >= cutoff.getTime()) continue;
+    if (!accounts.has(entry.personId)) accounts.set(entry.personId, new Map());
+    accounts.get(entry.personId).set("topup:" + entry.id, {
+      name: "Guthabenaufladung", unit: -entry.amountCents, quantity: 1, total: -entry.amountCents,
+    });
+  }
   return [...accounts].map(([id, items]) => ({
     name: names.get(id),
     items: [...items.values()].sort((a, b) => order.compare(a.name, b.name) || a.unit - b.unit),
