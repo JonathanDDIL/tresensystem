@@ -782,28 +782,6 @@
         gap: 8px;
       }
 
-      .range-days {
-        display: grid;
-        grid-template-columns: repeat(7, minmax(0, 1fr));
-        gap: 4px;
-        text-align: center;
-      }
-
-      .range-days button {
-        min-height: 40px;
-        padding: 0;
-        border-radius: 8px;
-      }
-
-      .range-days button[aria-pressed="true"] {
-        box-shadow: inset 0 0 0 1px var(--black);
-      }
-
-      .range-days button.range-endpoint {
-        background: var(--black);
-        color: var(--white);
-      }
-
       .protocol-deliveries {
         display: grid;
         gap: 14px;
@@ -832,10 +810,6 @@
       .protocol-deliveries :is(th, td):last-child {
         text-align: end;
         font-variant-numeric: tabular-nums;
-      }
-
-      #range-selection {
-        margin-top: 12px;
       }
 
       .monthly-list {
@@ -1372,15 +1346,8 @@
           </fieldset>
         </form>
 
-        <section id="admin-report-calendar" aria-label="Zeitraum auswählen" hidden>
-          <button type="button" class="primary" disabled>Inventurprotokoll herunterladen</button>
-          <div class="statistics-month-nav">
-            <button type="button" id="range-previous" aria-label="Vorheriger Monat">‹</button>
-            <strong id="range-month" aria-live="polite"></strong>
-            <button type="button" id="range-next" aria-label="Nächster Monat">›</button>
-          </div>
-          <div id="range-days" class="range-days"></div>
-          <p id="range-selection" class="report-caption" aria-live="polite"></p>
+        <section id="admin-inventory-protocols" aria-label="Inventurprotokolle" hidden>
+          <button type="button" class="primary" disabled>Herunterladen</button>
           <section class="protocol-deliveries" aria-labelledby="protocol-delivery-title">
             <h3 id="protocol-delivery-title">Lieferungen</h3>
             <p id="protocol-delivery-empty" class="report-caption" hidden>Keine Lieferungen gefunden.</p>
@@ -2556,17 +2523,13 @@
         }
       }
 
-      let rangeMonth = monthKey();
-      let rangeStart = "";
-      let rangeEnd = "";
       const rangeDateFormat = new Intl.DateTimeFormat("de-DE", {
         dateStyle: "medium", timeZone: "UTC",
       });
       const rangeDate = (day) => new Date(day + "T00:00:00Z");
 
       function renderProtocolDeliveries() {
-        const deliveries = (state.inventory?.deliveries || [])
-          .filter(({ date }) => !rangeEnd || (date >= rangeStart && date <= rangeEnd))
+        const deliveries = [...(state.inventory?.deliveries || [])]
           .sort((a, b) => b.date.localeCompare(a.date) || b.recordedAt.localeCompare(a.recordedAt));
         const container = $("protocol-delivery-tables");
         container.replaceChildren();
@@ -2591,59 +2554,6 @@
           container.append(table);
         }
       }
-
-      function renderRangeCalendar(focusDay) {
-        renderProtocolDeliveries();
-        const first = rangeDate(rangeMonth + "-01");
-        $("range-month").textContent = monthLabelFormat.format(first);
-        const days = $("range-days");
-        days.replaceChildren();
-        for (const weekday of ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]) {
-          const label = document.createElement("span");
-          label.textContent = weekday;
-          days.append(label);
-        }
-        const offset = (first.getUTCDay() + 6) % 7;
-        const date = new Date(first);
-        date.setUTCMonth(date.getUTCMonth() + 1, 0);
-        for (let day = 1; day <= date.getUTCDate(); day++) {
-          const key = rangeMonth + "-" + String(day).padStart(2, "0");
-          const button = document.createElement("button");
-          button.type = "button";
-          button.textContent = day;
-          button.setAttribute("aria-label", rangeDateFormat.format(rangeDate(key)));
-          button.setAttribute("aria-pressed", String(key >= rangeStart && key <= (rangeEnd || rangeStart)));
-          button.classList.toggle("range-endpoint", key === rangeStart || key === rangeEnd);
-          if (day === 1) button.style.gridColumnStart = offset + 1;
-          button.addEventListener("click", () => {
-            if (!rangeStart || rangeEnd) {
-              rangeStart = key;
-              rangeEnd = "";
-            } else {
-              [rangeStart, rangeEnd] = [rangeStart, key].sort();
-            }
-            renderRangeCalendar(key);
-          });
-          days.append(button);
-          if (focusDay === key) button.focus();
-        }
-        const format = (day) => rangeDateFormat.format(rangeDate(day));
-        $("range-selection").textContent = rangeEnd
-          ? `${format(rangeStart)} bis ${format(rangeEnd)}`
-          : rangeStart ? `Ab ${format(rangeStart)} · Enddatum auswählen` : "Startdatum auswählen";
-      }
-
-      function moveRangeMonth(offset) {
-        const date = rangeDate(rangeMonth + "-01");
-        date.setUTCMonth(date.getUTCMonth() + offset);
-        const next = date.toISOString().slice(0, 7);
-        if (!/^[1-9][0-9]{3}-[0-9]{2}$/.test(next)) return;
-        rangeMonth = next;
-        renderRangeCalendar();
-      }
-
-      $("range-previous").addEventListener("click", () => moveRangeMonth(-1));
-      $("range-next").addEventListener("click", () => moveRangeMonth(1));
 
       const inventoryDayFormat = new Intl.DateTimeFormat("sv-SE", {
         timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit",
@@ -2755,7 +2665,7 @@
         $("admin-stock-options").hidden = view !== "stock-menu";
         $("admin-stock-view").hidden = view !== "stock";
         $("admin-inventory-form").hidden = view !== "inventory" && view !== "delivery";
-        $("admin-report-calendar").hidden = view !== "convent";
+        $("admin-inventory-protocols").hidden = view !== "convent";
         $("admin-back").hidden = view === "overview";
         $("admin-message").hidden = true;
         $("bierwart-title").textContent = {
@@ -2793,12 +2703,7 @@
           $("inventory-items").replaceChildren();
           for (const { name } of state.inventory?.stock || []) addInventoryItem(name);
         }
-        if (view === "convent") {
-          rangeMonth = monthKey();
-          rangeStart = "";
-          rangeEnd = "";
-          renderRangeCalendar();
-        }
+        if (view === "convent") renderProtocolDeliveries();
         if (view === "monthly") {
           $("admin-month").value = monthKey();
           $("monthly-person-search").value = "";
