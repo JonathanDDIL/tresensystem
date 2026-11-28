@@ -145,16 +145,6 @@
         justify-self: center;
       }
 
-      .chip-reader-input {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        min-height: 0;
-        padding: 0;
-        border: 0;
-        clip-path: inset(50%);
-      }
-
       .scan svg {
         color: var(--red);
         width: 72px;
@@ -1338,8 +1328,6 @@
         </form>
         <form id="topup-chip-form" class="admin-form" hidden>
           <p id="topup-summary"></p>
-          <input id="topup-chip" class="chip-reader-input" type="password" autocomplete="off"
-            inputmode="none" maxlength="120" aria-label="Chipkennung" />
           <button id="topup-scan" type="button" class="scan topup-scan">
             <svg
           viewBox="0 0 64 64"
@@ -1774,25 +1762,17 @@
         $("topup-summary").textContent = `Aufladebetrag: ${euro(amount)}`;
         $("topup-amount-form").hidden = true;
         $("topup-chip-form").hidden = false;
-        $("topup-chip").focus();
+        $("topup-scan").focus();
       });
 
-      $("topup-scan").addEventListener("click", () => $("topup-chip").focus());
-      $("topup-chip").addEventListener("keydown", (event) => {
-        if (event.key !== "Enter") return;
-        event.preventDefault();
-        if (event.currentTarget.value.trim()) $("topup-chip-form").requestSubmit();
-      });
-
-      $("topup-chip-form").addEventListener("submit", async (event) => {
-        event.preventDefault();
+      $("topup-scan").addEventListener("click", async () => {
         if (topup.busy) return;
         const current = topup;
-        const field = $("topup-chip");
-        const chip = field.value.trim();
-        if (!chip) return;
-        current.chip = chip;
+        const scan = $("topup-scan");
+        // Der Testbutton simuliert den Chip des Testkontos Martin Werner.
+        current.chip = "NFC-0029";
         current.busy = true;
+        scan.disabled = true;
         try {
           const { personId, state: saved } = await requestState({
             action: "identify-chip", personId: current.personId, chip: current.chip,
@@ -1806,10 +1786,9 @@
           $("topup-password").focus();
         } catch (error) {
           showTopupError(error);
-          field.focus();
         } finally {
-          field.value = "";
           current.busy = false;
+          scan.disabled = false;
         }
       });
 
