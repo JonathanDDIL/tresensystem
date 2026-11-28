@@ -665,6 +665,25 @@
       }
 
       /* Bierwart: Formulare und Monatsabrechnung verwenden dieselbe Farbpalette. */
+      .admin-menu .primary {
+        display: grid;
+        grid-template-columns: 24px minmax(0, 1fr);
+        align-items: center;
+        gap: 12px;
+        padding-inline: 16px;
+        text-align: start;
+      }
+
+      .admin-menu svg {
+        width: 24px;
+        height: 24px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
       .admin-form {
         display: grid;
         gap: 16px;
@@ -1151,11 +1170,23 @@
             ×
           </button>
         </div>
-        <div id="bierwart-options" class="report-options">
-          <button id="admin-create" class="primary">Benutzer anlegen</button>
-          <button id="admin-balance" class="primary">Benutzer bearbeiten</button>
-          <button id="admin-monthly" class="primary">Monatsabrechnung</button>
-          <button id="admin-report" class="primary">Bericht</button>
+        <div id="bierwart-options" class="report-options admin-menu">
+          <button type="button" id="admin-create" class="primary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            <span>Benutzer anlegen</span>
+          </button>
+          <button type="button" id="admin-balance" class="primary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L20 7l-4-4L4 15z"/></svg>
+            <span>Benutzer bearbeiten</span>
+          </button>
+          <button type="button" id="admin-stock-menu" class="primary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h18v12H3zM2 4h20v4H2zM10 12h4"/></svg>
+            <span>Bestand</span>
+          </button>
+          <button type="button" id="admin-report" class="primary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7m-7 4h7"/></svg>
+            <span>Bericht</span>
+          </button>
         </div>
 
         <form id="create-person-form" class="admin-form" hidden>
@@ -1245,11 +1276,34 @@
           <ul id="monthly-list" class="monthly-list"></ul>
         </section>
 
-        <div id="admin-report-options" class="admin-form" hidden>
-          <button id="admin-stock" class="primary">Virtueller Bestand</button>
-          <button id="admin-inventory" class="primary">Inventur</button>
-          <button id="admin-delivery" class="primary">Lieferung</button>
-          <button id="admin-convent" class="primary">Inventurprotokolle</button>
+        <div id="admin-report-options" class="admin-form admin-menu" hidden>
+          <button type="button" id="admin-monthly" class="primary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18H6zM9 7h6m-6 4h6m-6 6h6"/></svg>
+            <span>Monatsabrechnung</span>
+          </button>
+          <button type="button" id="admin-convent" class="primary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H5v16h14V5h-4M9 3h6v4H9zM8 11h8m-8 4h8"/></svg>
+            <span>Inventurprotokolle</span>
+          </button>
+          <button type="button" id="admin-meetings" class="primary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16m-3-4v4M7 4v4M4 6h16v15H4zM8 13h3m2 0h3m-8 4h3"/></svg>
+            <span>Convente</span>
+          </button>
+        </div>
+
+        <div id="admin-stock-options" class="admin-form admin-menu" hidden>
+          <button type="button" id="admin-stock" class="primary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5v8l-9 5-9-5V8zM3 8l9 5 9-5m-9 5v8"/></svg>
+            <span>Virtueller Bestand</span>
+          </button>
+          <button type="button" id="admin-inventory" class="primary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5H5v16h14V5h-4M9 3h6v4H9zM8 14l2 2 5-5"/></svg>
+            <span>Inventur</span>
+          </button>
+          <button type="button" id="admin-delivery" class="primary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 6h12v11H2zM14 10h4l4 4v3h-8"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+            <span>Lieferung</span>
+          </button>
         </div>
 
         <section id="admin-stock-view" class="admin-form" hidden>
@@ -2612,6 +2666,7 @@
         $("change-balance-form").hidden = view !== "balance";
         $("monthly-report").hidden = view !== "monthly";
         $("admin-report-options").hidden = view !== "report";
+        $("admin-stock-options").hidden = view !== "stock-menu";
         $("admin-stock-view").hidden = view !== "stock";
         $("admin-inventory-form").hidden = view !== "inventory" && view !== "delivery";
         $("admin-report-calendar").hidden = view !== "convent";
@@ -2623,6 +2678,8 @@
           balance: "Benutzer bearbeiten",
           monthly: "Monatsabrechnung",
           report: "Bericht",
+          "stock-menu": "Bestand",
+          meetings: "Convente",
           stock: "Virtueller Bestand",
           inventory: "Inventur",
           delivery: "Lieferung",
@@ -2739,12 +2796,18 @@
         showAdminView("monthly"),
       );
       $("admin-report").addEventListener("click", () => showAdminView("report"));
+      $("admin-stock-menu").addEventListener("click", () => showAdminView("stock-menu"));
+      $("admin-meetings").addEventListener("click", () => showAdminView("meetings"));
       $("admin-stock").addEventListener("click", () => showAdminView("stock"));
       $("admin-inventory").addEventListener("click", () => showAdminView("inventory"));
       $("admin-delivery").addEventListener("click", () => showAdminView("delivery"));
       $("admin-convent").addEventListener("click", () => showAdminView("convent"));
+      const adminParentView = {
+        stock: "stock-menu", inventory: "stock-menu", delivery: "stock-menu",
+        monthly: "report", convent: "report", meetings: "report",
+      };
       $("admin-back").addEventListener("click", () =>
-        showAdminView(["stock", "inventory", "delivery", "convent"].includes(adminView) ? "report" : "overview"),
+        showAdminView(adminParentView[adminView] || "overview"),
       );
       $("new-balance").addEventListener("input", updateBalanceSaveButton);
       $("edit-beer-name").addEventListener("input", updateBalanceSaveButton);
