@@ -140,6 +140,21 @@
         font-size: clamp(24px, 4vw, 36px);
         font-weight: 700;
       }
+      .topup-scan {
+        width: min(100%, 540px);
+        justify-self: center;
+      }
+
+      .chip-reader-input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        min-height: 0;
+        padding: 0;
+        border: 0;
+        clip-path: inset(50%);
+      }
+
       .scan svg {
         color: var(--red);
         width: 72px;
@@ -1323,10 +1338,20 @@
         </form>
         <form id="topup-chip-form" class="admin-form" hidden>
           <p id="topup-summary"></p>
-          <label class="admin-field">Chip einer anderen Person auflegen
-            <input id="topup-chip" type="password" autocomplete="off" inputmode="none" maxlength="120" required />
-          </label>
-          <button class="primary" type="submit">Chip prüfen</button>
+          <input id="topup-chip" class="chip-reader-input" type="password" autocomplete="off"
+            inputmode="none" maxlength="120" aria-label="Chipkennung" />
+          <button id="topup-scan" type="button" class="scan topup-scan">
+            <svg
+          viewBox="0 0 64 64"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <rect x="10" y="17" width="44" height="30" rx="6" />
+          <path d="M34 26a9 9 0 0 1 0 12m5-17a16 16 0 0 1 0 22M20 28v8" /></svg>
+            <span>Chip auflegen</span>
+          </button>
         </form>
         <form id="topup-password-form" class="admin-form" hidden>
           <p id="topup-approver"></p>
@@ -1752,12 +1777,21 @@
         $("topup-chip").focus();
       });
 
+      $("topup-scan").addEventListener("click", () => $("topup-chip").focus());
+      $("topup-chip").addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        if (event.currentTarget.value.trim()) $("topup-chip-form").requestSubmit();
+      });
+
       $("topup-chip-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         if (topup.busy) return;
         const current = topup;
         const field = $("topup-chip");
-        current.chip = field.value.trim();
+        const chip = field.value.trim();
+        if (!chip) return;
+        current.chip = chip;
         current.busy = true;
         try {
           const { personId, state: saved } = await requestState({
