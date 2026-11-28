@@ -2332,7 +2332,7 @@
           const label = document.createElement("span");
           label.textContent = name;
           const quantity = document.createElement("strong");
-          quantity.textContent = bottles === null ? "Noch nicht gezählt" : `${bottles} Flaschen`;
+          quantity.textContent = bottles === null ? "-" : `${bottles} Flaschen`;
           row.append(label, quantity);
           list.append(row);
         }
