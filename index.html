@@ -1346,6 +1346,10 @@
           </fieldset>
         </form>
 
+        <section id="admin-meetings-view" aria-label="Convente" hidden>
+          <button type="button" class="primary" disabled>Herunterladen</button>
+        </section>
+
         <section id="admin-inventory-protocols" aria-label="Inventurprotokolle" hidden>
           <button id="download-protocol" type="button" class="primary">Herunterladen</button>
           <p id="download-protocol-error" class="error" role="alert" hidden></p>
@@ -2690,6 +2694,7 @@
         $("admin-stock-view").hidden = view !== "stock";
         $("admin-inventory-form").hidden = view !== "inventory" && view !== "delivery";
         $("admin-inventory-protocols").hidden = view !== "convent";
+        $("admin-meetings-view").hidden = view !== "meetings";
         $("admin-back").hidden = view === "overview";
         $("admin-message").hidden = true;
         $("bierwart-title").textContent = {
