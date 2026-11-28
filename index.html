@@ -1249,7 +1249,7 @@
           <button id="admin-stock" class="primary">Virtueller Bestand</button>
           <button id="admin-inventory" class="primary">Inventur</button>
           <button id="admin-delivery" class="primary">Lieferung</button>
-          <button id="admin-convent" class="primary">Conventsbericht</button>
+          <button id="admin-convent" class="primary">Inventurprotokolle</button>
         </div>
 
         <section id="admin-stock-view" class="admin-form" hidden>
@@ -1270,7 +1270,7 @@
         </form>
 
         <section id="admin-report-calendar" aria-label="Zeitraum auswählen" hidden>
-          <button type="button" class="primary" disabled>Conventsbericht herunterladen</button>
+          <button type="button" class="primary" disabled>Inventurprotokoll herunterladen</button>
           <div class="statistics-month-nav">
             <button type="button" id="range-previous" aria-label="Vorheriger Monat">‹</button>
             <strong id="range-month" aria-live="polite"></strong>
@@ -2626,7 +2626,7 @@
           stock: "Virtueller Bestand",
           inventory: "Inventur",
           delivery: "Lieferung",
-          convent: "Conventsbericht",
+          convent: "Inventurprotokolle",
         }[view];
 
         if (view === "create") {
