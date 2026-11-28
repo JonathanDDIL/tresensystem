@@ -1319,12 +1319,12 @@
           <h2 id="topup-title">Aufladen</h2>
           <button type="button" class="close" data-close="topup-dialog" aria-label="Schließen">×</button>
         </div>
-        <p id="topup-person"></p>
+        <p>Aufladen für: <span id="topup-person"></span></p>
         <form id="topup-amount-form" class="admin-form">
           <label class="admin-field">Betrag in Euro
             <input id="topup-amount" inputmode="decimal" maxlength="20" required />
           </label>
-          <button class="primary" type="submit">Weiter zur Bestätigung</button>
+          <button class="primary" type="submit">Bestätigen</button>
         </form>
         <form id="topup-chip-form" class="admin-form" hidden>
           <p id="topup-summary"></p>
@@ -1342,7 +1342,7 @@
           </button>
         </form>
         <form id="topup-password-form" class="admin-form" hidden>
-          <p id="topup-approver"></p>
+          <p>Prüfer: <span id="topup-approver"></span></p>
           <label class="admin-field">Passwort der bestätigenden Person
             <input id="topup-password" type="password" maxlength="128" required />
           </label>
