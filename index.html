@@ -672,7 +672,8 @@
       }
 
       /* Bierwart: Formulare und Monatsabrechnung verwenden dieselbe Farbpalette. */
-      .admin-menu .primary {
+      .admin-menu .primary,
+      #inventory-add {
         display: grid;
         grid-template-columns: 24px minmax(0, 1fr);
         align-items: center;
@@ -681,7 +682,8 @@
         text-align: start;
       }
 
-      .admin-menu svg {
+      .admin-menu svg,
+      #inventory-add svg {
         width: 24px;
         height: 24px;
         fill: none;
@@ -1332,7 +1334,10 @@
           </label>
           <fieldset id="inventory-fields" class="inventory-fields" hidden>
             <div id="inventory-items" class="admin-form"></div>
-            <button id="inventory-add" type="button">Getränk hinzufügen</button>
+            <button id="inventory-add" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              <span>Getränk hinzufügen</span>
+            </button>
             <button id="inventory-save" type="submit" class="primary positive">Inventur eintragen</button>
           </fieldset>
         </form>
