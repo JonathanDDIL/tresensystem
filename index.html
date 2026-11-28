@@ -1347,7 +1347,8 @@
         </form>
 
         <section id="admin-inventory-protocols" aria-label="Inventurprotokolle" hidden>
-          <button type="button" class="primary" disabled>Herunterladen</button>
+          <button id="download-protocol" type="button" class="primary">Herunterladen</button>
+          <p id="download-protocol-error" class="error" role="alert" hidden></p>
           <section class="protocol-deliveries" aria-labelledby="protocol-delivery-title">
             <h3 id="protocol-delivery-title">Lieferungen</h3>
             <p id="protocol-delivery-empty" class="report-caption" hidden>Keine Lieferungen gefunden.</p>
@@ -2527,6 +2528,29 @@
         dateStyle: "medium", timeZone: "UTC",
       });
       const rangeDate = (day) => new Date(day + "T00:00:00Z");
+
+      $("download-protocol").addEventListener("click", async () => {
+        const button = $("download-protocol");
+        const error = $("download-protocol-error");
+        button.disabled = true;
+        error.hidden = true;
+        try {
+          const response = await fetch("/.netlify/functions/inventurprotokoll");
+          if (!response.ok || !response.headers.get("Content-Type")?.includes("application/pdf"))
+            throw new Error("PDF download failed");
+          const url = URL.createObjectURL(await response.blob());
+          const download = document.createElement("a");
+          download.href = url;
+          download.download = "Inventurprotokolle.pdf";
+          download.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch {
+          error.textContent = "Inventurprotokoll konnte nicht heruntergeladen werden.";
+          error.hidden = false;
+        } finally {
+          button.disabled = false;
+        }
+      });
 
       function renderProtocolDeliveries() {
         const deliveries = [...(state.inventory?.deliveries || [])]
