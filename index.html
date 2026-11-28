@@ -1251,6 +1251,9 @@
             Biernamen ändern
             <input id="edit-beer-name" type="text" maxlength="80" autocomplete="off" required disabled />
           </label>
+          <label class="admin-field">NFC-Kennung ersetzen
+            <input id="edit-person-nfc" readonly aria-haspopup="dialog" placeholder="Neuen Chip erfassen" disabled />
+          </label>
           <label class="admin-field"
             >Neues Guthaben in Euro
             <input
@@ -2456,9 +2459,11 @@
         current.hidden = !person;
         current.textContent = person ? `Aktuelles Guthaben: ${euro(balanceFor(person.id))}` : "";
         $("edit-beer-name").disabled = !person;
+        $("edit-person-nfc").disabled = !person;
         $("new-balance").disabled = !person;
         if (resetFields) {
           $("edit-beer-name").value = person ? beerNameOf(person) : "";
+          $("edit-person-nfc").value = "";
           $("new-balance").value = "";
         }
         updateBalanceSaveButton();
@@ -2480,7 +2485,7 @@
         const balance = $("new-balance").value.trim();
         $("save-balance").disabled = savingUser || !storageReady || !person ||
           !beerName || (balance !== "" && parseEuroInput(balance) === null) ||
-          (balance === "" && beerName === beerNameOf(person));
+          (balance === "" && !$("edit-person-nfc").value && beerName === beerNameOf(person));
       }
 
       // Für jeden Monat wird der gespeicherte Kontostand ausgewertet, nicht nur der laufende Monat.
@@ -2881,24 +2886,29 @@
         }
       });
 
-      function openNewPersonChip() {
-        $("new-person-chip-code").value = $("new-person-nfc").value;
-        showDialog("new-person-chip-dialog");
-        $("new-person-chip-code").select();
+      let chipTarget;
+      for (const id of ["new-person-nfc", "edit-person-nfc"]) {
+        const field = $(id);
+        const openChipDialog = () => {
+          chipTarget = field;
+          $("new-person-chip-code").value = field.value;
+          showDialog("new-person-chip-dialog");
+          $("new-person-chip-code").select();
+        };
+        field.addEventListener("click", openChipDialog);
+        field.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          openChipDialog();
+        });
       }
-
-      $("new-person-nfc").addEventListener("click", openNewPersonChip);
-      $("new-person-nfc").addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        openNewPersonChip();
-      });
       $("new-person-scan").addEventListener("click", () => $("new-person-chip-code").focus());
       $("new-person-chip-form").addEventListener("submit", (event) => {
         event.preventDefault();
         const code = $("new-person-chip-code").value.trim();
         if (!code) return;
-        $("new-person-nfc").value = code;
+        chipTarget.value = code;
+        if (chipTarget.id === "edit-person-nfc") updateBalanceSaveButton();
         $("new-person-chip-dialog").close();
       });
 
@@ -2931,6 +2941,8 @@
         const beerName = $("edit-beer-name").value.trim();
         const balance = $("new-balance").value.trim();
         const change = { action: "edit-person", personId };
+        const nfcId = $("edit-person-nfc").value;
+        if (nfcId) change.nfcId = nfcId;
         if (beerName !== beerNameOf(person)) change.beerName = beerName;
         if (balance !== "") change.targetCents = parseEuroInput(balance);
 

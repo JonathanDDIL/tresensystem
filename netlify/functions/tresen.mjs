@@ -215,13 +215,20 @@ function applyChange(data, input) {
   }
 
   if (input.action === "edit-person") {
-    requireInput(input.beerName !== undefined || input.targetCents !== undefined,
+    requireInput(input.beerName !== undefined || input.targetCents !== undefined || input.nfcId !== undefined,
       "Keine Änderungen angegeben.");
     if (input.beerName !== undefined) {
       const beerName = typeof input.beerName === "string" ? input.beerName.trim() : "";
       requireInput(beerName && beerName.length <= 80, "Bitte einen gültigen Biernamen eingeben.");
       requireUniqueBeerName(data, beerName, person.id);
       person.beerName = beerName;
+    }
+    if (input.nfcId !== undefined) {
+      const nfcId = typeof input.nfcId === "string" ? input.nfcId.trim() : "";
+      requireInput(nfcId && nfcId.length <= 120, "Bitte eine gültige NFC-Kennung eingeben.");
+      requireInput(!data.people.some((other) => other.id !== person.id && other.nfcId === nfcId),
+        "Diese NFC-Kennung ist bereits vergeben.");
+      person.nfcId = nfcId;
     }
     if (input.targetCents !== undefined) setBalance(data, person, input, month, createdAt);
     return {};
