@@ -1225,12 +1225,8 @@
           </label>
           <label class="admin-field"
             >NFC-Kennung
-            <input
-              id="new-person-nfc"
-              autocomplete="off"
-              maxlength="120"
-              required
-            />
+            <input id="new-person-nfc" readonly aria-haspopup="dialog"
+              placeholder="Chip erfassen" />
           </label>
           <label class="admin-field">Passwort
             <input id="new-person-password" type="password" maxlength="128" autocomplete="new-password" required />
@@ -1430,6 +1426,31 @@
         </form>
         <p id="topup-message" role="status" hidden></p>
       </div>
+    </dialog>
+
+    <dialog id="new-person-chip-dialog" class="modal" aria-labelledby="new-person-chip-title">
+      <form id="new-person-chip-form" class="modal-body">
+        <div class="modal-head">
+          <h2 id="new-person-chip-title">NFC-Kennung erfassen</h2>
+          <button type="button" class="close" data-close="new-person-chip-dialog" aria-label="Schließen">×</button>
+        </div>
+        <button id="new-person-scan" type="button" class="scan topup-scan">
+          <svg
+          viewBox="0 0 64 64"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
+        >
+          <rect x="10" y="17" width="44" height="30" rx="6" />
+          <path d="M34 26a9 9 0 0 1 0 12m5-17a16 16 0 0 1 0 22M20 28v8" /></svg>
+          <span>Chip auflegen</span>
+        </button>
+        <label class="admin-field">NFC-Kennung
+          <input id="new-person-chip-code" autocomplete="off" maxlength="120" required autofocus />
+        </label>
+        <button type="submit" class="primary positive">Übernehmen</button>
+      </form>
     </dialog>
 
     <!-- JAVASCRIPT: Daten, Speicherung und Reaktionen auf die Bedienung. -->
@@ -2858,6 +2879,27 @@
           invoiceDownloading = false;
           $("download-invoice").removeAttribute("aria-busy");
         }
+      });
+
+      function openNewPersonChip() {
+        $("new-person-chip-code").value = $("new-person-nfc").value;
+        showDialog("new-person-chip-dialog");
+        $("new-person-chip-code").select();
+      }
+
+      $("new-person-nfc").addEventListener("click", openNewPersonChip);
+      $("new-person-nfc").addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openNewPersonChip();
+      });
+      $("new-person-scan").addEventListener("click", () => $("new-person-chip-code").focus());
+      $("new-person-chip-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const code = $("new-person-chip-code").value.trim();
+        if (!code) return;
+        $("new-person-nfc").value = code;
+        $("new-person-chip-dialog").close();
       });
 
       $("create-person-form").addEventListener("submit", async (event) => {
