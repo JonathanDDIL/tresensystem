@@ -123,7 +123,14 @@
       }
 
       /* 4. Startseite mit Chip-Schaltfläche */
+      #start-people {
+        position: absolute;
+        inset-block-start: max(18px, env(safe-area-inset-top));
+        inset-inline-start: max(18px, env(safe-area-inset-left));
+      }
+
       .start {
+        position: relative;
         display: grid;
         place-items: center;
       }
@@ -184,13 +191,13 @@
         overflow-wrap: anywhere;
       }
 
-      #people {
+      #people, #start-people {
         display: grid;
         place-items: center;
         padding-inline: 16px;
       }
 
-      #people svg {
+      #people svg, #start-people svg {
         width: 24px;
         height: 24px;
       }
@@ -922,6 +929,13 @@
     </svg>
     <!-- STARTSEITE: Die Schaltfläche simuliert das Auflegen eines Chips. -->
     <section id="start" class="screen start">
+        <button id="start-people" class="people-button" aria-label="Personen" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="7" r="4" />
+            <path d="M4 21v-1a8 8 0 0 1 16 0v1Z" />
+          </svg>
+        </button>
       <button id="scan" class="scan">
         <svg
           viewBox="0 0 64 64"
@@ -1677,7 +1691,7 @@
               updateAdminBalance(true);
               return;
             }
-            if (person.id !== activePerson.id) openPersonPassword(person);
+            if (!$("start").hidden || person.id !== activePerson.id) openPersonPassword(person);
           });
           $("people-list").append(button);
         }
@@ -1696,6 +1710,7 @@
         renderPeople();
         showDialog("people-dialog");
       }
+      $("start-people").addEventListener("click", () => openPersonSearch(false));
       $("people").addEventListener("click", () => openPersonSearch(false));
       $("balance-person").addEventListener("click", () => openPersonSearch(true));
       $("person-search").addEventListener("input", renderPeople);
@@ -1772,6 +1787,8 @@
           updateAccount();
           resetDisplay();
           $("person-password-dialog").close();
+          $("start").hidden = true;
+          $("app").hidden = false;
         } catch (error) {
           const message = $("person-password-error");
           message.textContent = error.message;
